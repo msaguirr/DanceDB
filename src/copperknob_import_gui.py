@@ -546,7 +546,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(dance_row, text="Priority:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
         self.priority_var = tk.StringVar()
         self.priority_combo = ttk.Combobox(dance_row, textvariable=self.priority_var, width=12, values=[
-            "Highest", "High", "Medium", "Low", "Lowest", "Never"
+            "", "Highest", "High", "Medium", "Low", "Lowest", "Never"
         ], state='readonly', takefocus=0)
         self.priority_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.priority_combo, self.priority_var)
@@ -568,7 +568,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(choreo_row, text="Known?:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
         self.known_var = tk.StringVar()
         self.known_combo = ttk.Combobox(choreo_row, textvariable=self.known_var, width=12, values=[
-            "Yes", "No", "Partially", "On the floor"
+            "", "Yes", "No", "Partially", "On the floor"
         ], state='readonly', takefocus=0)
         self.known_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.known_combo, self.known_var)
@@ -590,7 +590,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(release_row, text="Category:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
         self.category_var = tk.StringVar()
         self.category_combo = ttk.Combobox(release_row, textvariable=self.category_var, width=12, values=[
-            "Learn next", "Learn soon", "Learn later"
+            "", "Learn next", "Learn soon", "Learn later"
         ], state='readonly', takefocus=0)
         self.category_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.category_combo, self.category_var)
@@ -602,7 +602,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(level_row, text="Level:", width=13).pack(side=tk.LEFT, padx=(0, 5))
         self.level_var = tk.StringVar()
         self.level_combo = ttk.Combobox(level_row, textvariable=self.level_var, width=43, values=[
-            "Absolute Beginner", "Beginner", "Improver", "Intermediate", "Advanced"
+            "", "Absolute Beginner", "Beginner", "Improver", "Intermediate", "Advanced"
         ], state='readonly', takefocus=0)
         self.level_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.level_combo, self.level_var)
@@ -616,7 +616,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(level_row, text="Frequency:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
         self.frequency_var = tk.StringVar()
         self.frequency_combo = ttk.Combobox(level_row, textvariable=self.frequency_var, width=12, values=[
-            "Never", "Once", "Rarely", "Sometimes", "Usually", "Always"
+            "", "Never", "Once", "Rarely", "Sometimes", "Usually", "Always"
         ], state='readonly', takefocus=0)
         self.frequency_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.frequency_combo, self.frequency_var)
@@ -768,76 +768,92 @@ class CopperknobImportGUI(tk.Tk):
         self.songs_editable = False
     
     def _setup_combobox_behavior(self, combo, var):
-        """Setup custom combobox behavior to show empty box when opened.
-        
-        When the dropdown is opened, the box shows as empty with the current selection 
-        highlighted in the list. The empty option in the list allows deselection.
-        Also, when the menu is open and the user clicks the empty entry field, the selection is cleared (deselected).
-        """
-        # Store the current value before dropdown opens
+        """Custom Combobox: empty option only in entry, not menu."""
+        # Remove empty string from values if present
+        values = list(combo.cget('values'))
+        if values and values[0] == "":
+            values = values[1:]
+            combo['values'] = values
+
         combo._stored_value = ''
-        
-        # Track if dropdown is open
         combo._dropdown_open = False
+        combo._entry_cleared = False
 
         def entry_widget():
-            # Get the Entry subwidget of the Combobox
             try:
+                for child in combo.winfo_children():
+                    if isinstance(child, tk.Entry):
+                        return child
                 return combo.nametowidget(combo.winfo_children()[0].winfo_pathname(combo.winfo_children()[0].winfo_id()))
             except Exception:
                 return None
 
-        def on_entry_click(event):
-            # Only clear selection if dropdown is open and entry is empty
-            if combo._dropdown_open and not combo.get():
-                # Deselect any selection in the dropdown list
-                combo.selection_clear()
-                var.set('')
-                combo._stored_value = ''
-
-        def on_dropdown_open():
-            """When dropdown opens, temporarily clear the display and bind entry click."""
-            combo._stored_value = var.get()
-            combo.set('')
-            combo._dropdown_open = True
-            # Bind click on entry to clear selection if empty
+        def clear_entry_selection():
             entry = entry_widget()
             if entry:
-                entry.bind('<Button-1>', on_entry_click, add='+')
+                entry.selection_clear()
+                entry.icursor('end')
+
+        def on_dropdown_open():
+            # Store the current value
+            combo._stored_value = var.get()
+            combo.set("")  # Show entry as empty (acts as empty option)
+            combo._dropdown_open = True
+            combo._entry_cleared = False
+            entry = entry_widget()
+            if entry:
+                # If user clicks entry while menu is open and entry is empty, treat as clear
+                def entry_click(ev):
+                    if combo._dropdown_open and not combo.get():
+                        combo._entry_cleared = True
+                entry.bind('<Button-1>', entry_click, add='+')
+                combo._entry_click = entry_click
 
         def on_dropdown_close(event=None):
             combo._dropdown_open = False
-            # Unbind click handler from entry
             entry = entry_widget()
-            if entry:
-                entry.unbind('<Button-1>', on_entry_click)
+            if entry and hasattr(combo, '_entry_click'):
+                entry.unbind('<Button-1>', combo._entry_click)
+                del combo._entry_click
+            # If entry was cleared, clear var
+            if combo._entry_cleared or not combo.get():
+                var.set("")
+                combo.set("")
+                combo._stored_value = ""
+                combo._entry_cleared = False
+            else:
+                var.set(combo.get())
+                combo._stored_value = combo.get()
 
         def on_select(event):
             selected = combo.get()
             var.set(selected)
             combo._stored_value = selected
-            combo.selection_clear()
+            clear_entry_selection()
             self.focus_set()
+            combo._entry_cleared = False
             on_dropdown_close()
 
         def on_focus_out(event):
-            current = var.get()
-            if not current and combo._stored_value:
-                var.set(combo._stored_value)
+            # If entry was cleared, keep cleared
+            if combo._entry_cleared or not combo.get():
+                var.set("")
+                combo.set("")
+                combo._stored_value = ""
+                combo._entry_cleared = False
             else:
-                combo._stored_value = current
+                var.set(combo.get())
+                combo._stored_value = combo.get()
             self.focus_set()
             on_dropdown_close()
 
         def on_focus_in(event):
             self.focus_set()
 
-        # Configure the combobox
         combo.configure(postcommand=on_dropdown_open)
         combo.bind('<<ComboboxSelected>>', on_select)
         combo.bind('<FocusOut>', on_focus_out)
         combo.bind('<FocusIn>', on_focus_in)
-        # Also close dropdown tracking on Escape key
         combo.bind('<Escape>', on_dropdown_close)
     
     def _on_song_select(self, event):
