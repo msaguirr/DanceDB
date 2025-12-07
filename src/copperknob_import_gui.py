@@ -631,7 +631,7 @@ class CopperknobImportGUI(tk.Tk):
         # Other Info multi-select field, immediately to the left after buttons
         # Adjust horizontal space so 'Other Info' aligns with last column
         other_info_row = ttk.Frame(button_row)
-        other_info_row.pack(side=tk.LEFT, padx=(374, 0))
+        other_info_row.pack(side=tk.LEFT, padx=(376, 0))
         ttk.Label(other_info_row, text="Other Info:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(2, 3))
         checkbox_frame = ttk.Frame(other_info_row)
         checkbox_frame.pack(side=tk.LEFT)
