@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Database files
+*.csv
+*.db
+*.sqlite
+
+# PDFs downloaded from Copperknob
+pdfs/
+
+# macOS
+.DS_Store
+
+# User config
+.myspotipy/
