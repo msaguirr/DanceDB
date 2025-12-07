@@ -515,6 +515,7 @@ class CopperknobImportGUI(tk.Tk):
         data_frame = ttk.LabelFrame(main, text="Step 2: Review Extracted Data", padding=10)
         data_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
+
         # Create a grid for the extracted data
         row = 0
         
@@ -610,44 +611,37 @@ class CopperknobImportGUI(tk.Tk):
         self._setup_combobox_behavior(self.frequency_combo, self.frequency_var)
         row += 1
         
-        # Other Info row - matching exact spacing of other third column fields
-        other_info_row = ttk.Frame(data_frame)
-        other_info_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
-        ttk.Label(other_info_row, text="", width=13).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Frame(other_info_row, width=45*7).pack(side=tk.LEFT)
-        ttk.Label(other_info_row, text="", width=7, anchor=tk.E).pack(side=tk.LEFT, padx=(5, 3))
-        ttk.Frame(other_info_row, width=10*7).pack(side=tk.LEFT)
-        ttk.Label(other_info_row, text="Other Info:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
-        
-        # Checkbox frame for multi-select
-        checkbox_frame = ttk.Frame(other_info_row)
-        checkbox_frame.pack(side=tk.LEFT)
-        
-        self.other_info_learn = tk.BooleanVar()
-        self.other_info_practice = tk.BooleanVar()
-        self.other_info_old = tk.BooleanVar()
-        
-        ttk.Checkbutton(checkbox_frame, text="Learn", variable=self.other_info_learn).pack(side=tk.LEFT, padx=2)
-        ttk.Checkbutton(checkbox_frame, text="Practice", variable=self.other_info_practice).pack(side=tk.LEFT, padx=2)
-        ttk.Checkbutton(checkbox_frame, text="Old Dance", variable=self.other_info_old).pack(side=tk.LEFT, padx=2)
-        row += 1
-        
-        # Buttons below left column fields
-        button_frame = ttk.Frame(data_frame)
-        button_frame.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=5)
-        
+
+        # Buttons row
+        button_row = ttk.Frame(data_frame)
+        button_row.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=3)
+
         self.stepsheet_url = ""
         self.copperknob_id = None  # Hidden field to track unique dance ID
-        self.stepsheet_button = ttk.Button(button_frame, text="Open in Copperknob", command=self._open_stepsheet, width=18)
+        self.stepsheet_button = ttk.Button(button_row, text="Open in Copperknob", command=self._open_stepsheet, width=18)
         self.stepsheet_button.pack(side=tk.LEFT, padx=(0, 5))
         self.stepsheet_button.config(state='disabled')
-        
+
         self.pdf_url = ""
         self.pdf_path = None  # Track downloaded PDF path
-        self.pdf_button = ttk.Button(button_frame, text="Download PDF", command=self._download_pdf, width=12)
+        self.pdf_button = ttk.Button(button_row, text="Download PDF", command=self._download_pdf, width=12)
         self.pdf_button.pack(side=tk.LEFT)
         self.pdf_button.config(state='disabled')
-        
+
+        # Other Info multi-select field, immediately to the left after buttons
+        # Adjust horizontal space so 'Other Info' aligns with last column
+        other_info_row = ttk.Frame(button_row)
+        other_info_row.pack(side=tk.LEFT, padx=(374, 0))
+        ttk.Label(other_info_row, text="Other Info:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(2, 3))
+        checkbox_frame = ttk.Frame(other_info_row)
+        checkbox_frame.pack(side=tk.LEFT)
+        self.other_info_practice = tk.BooleanVar()
+        self.other_info_learn = tk.BooleanVar()
+        self.other_info_old = tk.BooleanVar()
+        ttk.Checkbutton(checkbox_frame, text="Practice", variable=self.other_info_practice).pack(side=tk.LEFT, padx=2)
+        ttk.Checkbutton(checkbox_frame, text="Learn", variable=self.other_info_learn).pack(side=tk.LEFT, padx=2)
+        ttk.Checkbutton(checkbox_frame, text="Old Dance", variable=self.other_info_old).pack(side=tk.LEFT, padx=2)
+
         row += 1
         
         # Song section with list on left and details on right
@@ -995,7 +989,9 @@ class CopperknobImportGUI(tk.Tk):
                 import subprocess
                 
                 # Use pdfs subfolder in DanceDB directory
-                download_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pdfs')
+                # Always use top-level DanceDB/pdfs folder
+                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                download_dir = os.path.join(project_root, 'pdfs')
                 os.makedirs(download_dir, exist_ok=True)
                 
                 options = Options()
@@ -1171,7 +1167,9 @@ class CopperknobImportGUI(tk.Tk):
                 # Check if we already have a PDF for this URL using the copperknob_id
                 if self.copperknob_id:
                     # Look for PDF with this ID in pdfs folder
-                    download_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pdfs')
+                    # Always use top-level DanceDB/pdfs folder
+                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    download_dir = os.path.join(project_root, 'pdfs')
                     import glob
                     # Common Copperknob PDF naming patterns
                     possible_patterns = [
