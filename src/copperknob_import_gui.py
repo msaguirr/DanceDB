@@ -483,11 +483,22 @@ class CopperknobImportGUI(tk.Tk):
         super().__init__()
         self.title("Import from Copperknob")
         self.geometry("1150x750")
-        
+
+        # Remove blue focus ring from all Comboboxes
+        style = ttk.Style(self)
+        style.map('TCombobox',
+            focuscolor=[('!focus', 'white'), ('focus', 'white')],
+            highlightbackground=[('active', 'white'), ('focus', 'white'), ('!focus', 'white')],
+            highlightcolor=[('active', 'white'), ('focus', 'white'), ('!focus', 'white')],
+            bordercolor=[('active', 'white'), ('focus', 'white'), ('!focus', 'white')],
+        )
+        style.configure('TCombobox', highlightthickness=0, borderwidth=0, relief='flat',
+                        highlightbackground='white', highlightcolor='white', bordercolor='white')
+
         self.importer = CopperknobImporter()
         self.db = CSVDatabase(DEFAULT_CSV, DEFAULT_FIELDS)
         self.extracted_data = None
-        
+
         self._build_ui()
     
     def _build_ui(self):
@@ -536,7 +547,7 @@ class CopperknobImportGUI(tk.Tk):
         self.priority_var = tk.StringVar()
         self.priority_combo = ttk.Combobox(dance_row, textvariable=self.priority_var, width=12, values=[
             "Highest", "High", "Medium", "Low", "Lowest", "Never"
-        ], state='readonly')
+        ], state='readonly', takefocus=0)
         self.priority_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.priority_combo, self.priority_var)
         row += 1
@@ -558,7 +569,7 @@ class CopperknobImportGUI(tk.Tk):
         self.known_var = tk.StringVar()
         self.known_combo = ttk.Combobox(choreo_row, textvariable=self.known_var, width=12, values=[
             "Yes", "No", "Partially", "On the floor"
-        ], state='readonly')
+        ], state='readonly', takefocus=0)
         self.known_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.known_combo, self.known_var)
         row += 1
@@ -580,7 +591,7 @@ class CopperknobImportGUI(tk.Tk):
         self.category_var = tk.StringVar()
         self.category_combo = ttk.Combobox(release_row, textvariable=self.category_var, width=12, values=[
             "Learn next", "Learn soon", "Learn later"
-        ], state='readonly')
+        ], state='readonly', takefocus=0)
         self.category_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.category_combo, self.category_var)
         row += 1
@@ -592,7 +603,7 @@ class CopperknobImportGUI(tk.Tk):
         self.level_var = tk.StringVar()
         self.level_combo = ttk.Combobox(level_row, textvariable=self.level_var, width=43, values=[
             "Absolute Beginner", "Beginner", "Improver", "Intermediate", "Advanced"
-        ], state='readonly')
+        ], state='readonly', takefocus=0)
         self.level_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.level_combo, self.level_var)
         
@@ -606,7 +617,7 @@ class CopperknobImportGUI(tk.Tk):
         self.frequency_var = tk.StringVar()
         self.frequency_combo = ttk.Combobox(level_row, textvariable=self.frequency_var, width=12, values=[
             "Never", "Once", "Rarely", "Sometimes", "Usually", "Always"
-        ], state='readonly')
+        ], state='readonly', takefocus=0)
         self.frequency_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.frequency_combo, self.frequency_var)
         row += 1
@@ -778,9 +789,11 @@ class CopperknobImportGUI(tk.Tk):
             combo._stored_value = selected
             # Remove text selection/highlighting after selection
             combo.selection_clear()
+            # Move focus away from Combobox to parent window to suppress focus ring
+            self.focus_set()
         
         def on_focus_out(event):
-            """Restore previous value if user clicks away without selecting."""
+            """Restore previous value if user clicks away without selecting, and always move focus away to suppress ring."""
             current = var.get()
             if not current and combo._stored_value:
                 # User opened dropdown but didn't select anything, restore old value
@@ -788,11 +801,18 @@ class CopperknobImportGUI(tk.Tk):
             else:
                 # Keep the current selection (which may be empty if user selected blank)
                 combo._stored_value = current
+            # Always move focus away from Combobox to parent window to suppress focus ring
+            self.focus_set()
         
+        def on_focus_in(event):
+            """Immediately move focus away from Combobox to suppress blue ring on macOS."""
+            self.focus_set()
+
         # Configure the combobox
         combo.configure(postcommand=on_dropdown_open)
         combo.bind('<<ComboboxSelected>>', on_select)
         combo.bind('<FocusOut>', on_focus_out)
+        combo.bind('<FocusIn>', on_focus_in)
     
     def _on_song_select(self, event):
         """Handle song selection from the listbox."""
