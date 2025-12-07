@@ -772,40 +772,64 @@ class CopperknobImportGUI(tk.Tk):
         
         When the dropdown is opened, the box shows as empty with the current selection 
         highlighted in the list. The empty option in the list allows deselection.
+        Also, when the menu is open and the user clicks the empty entry field, the selection is cleared (deselected).
         """
         # Store the current value before dropdown opens
         combo._stored_value = ''
         
+        # Track if dropdown is open
+        combo._dropdown_open = False
+
+        def entry_widget():
+            # Get the Entry subwidget of the Combobox
+            try:
+                return combo.nametowidget(combo.winfo_children()[0].winfo_pathname(combo.winfo_children()[0].winfo_id()))
+            except Exception:
+                return None
+
+        def on_entry_click(event):
+            # Only clear selection if dropdown is open and entry is empty
+            if combo._dropdown_open and not combo.get():
+                # Deselect any selection in the dropdown list
+                combo.selection_clear()
+                var.set('')
+                combo._stored_value = ''
+
         def on_dropdown_open():
-            """When dropdown opens, temporarily clear the display."""
+            """When dropdown opens, temporarily clear the display and bind entry click."""
             combo._stored_value = var.get()
-            # Temporarily clear the entry field while dropdown is open
             combo.set('')
-        
+            combo._dropdown_open = True
+            # Bind click on entry to clear selection if empty
+            entry = entry_widget()
+            if entry:
+                entry.bind('<Button-1>', on_entry_click, add='+')
+
+        def on_dropdown_close(event=None):
+            combo._dropdown_open = False
+            # Unbind click handler from entry
+            entry = entry_widget()
+            if entry:
+                entry.unbind('<Button-1>', on_entry_click)
+
         def on_select(event):
-            """Handle selection from dropdown list."""
             selected = combo.get()
-            var.set(selected)  # Update the variable with selection (may be empty)
+            var.set(selected)
             combo._stored_value = selected
-            # Remove text selection/highlighting after selection
             combo.selection_clear()
-            # Move focus away from Combobox to parent window to suppress focus ring
             self.focus_set()
-        
+            on_dropdown_close()
+
         def on_focus_out(event):
-            """Restore previous value if user clicks away without selecting, and always move focus away to suppress ring."""
             current = var.get()
             if not current and combo._stored_value:
-                # User opened dropdown but didn't select anything, restore old value
                 var.set(combo._stored_value)
             else:
-                # Keep the current selection (which may be empty if user selected blank)
                 combo._stored_value = current
-            # Always move focus away from Combobox to parent window to suppress focus ring
             self.focus_set()
-        
+            on_dropdown_close()
+
         def on_focus_in(event):
-            """Immediately move focus away from Combobox to suppress blue ring on macOS."""
             self.focus_set()
 
         # Configure the combobox
@@ -813,6 +837,8 @@ class CopperknobImportGUI(tk.Tk):
         combo.bind('<<ComboboxSelected>>', on_select)
         combo.bind('<FocusOut>', on_focus_out)
         combo.bind('<FocusIn>', on_focus_in)
+        # Also close dropdown tracking on Escape key
+        combo.bind('<Escape>', on_dropdown_close)
     
     def _on_song_select(self, event):
         """Handle song selection from the listbox."""
