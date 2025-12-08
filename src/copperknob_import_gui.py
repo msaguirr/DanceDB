@@ -8,6 +8,8 @@ This tool allows you to paste a Copperknob URL and automatically extract:
 - Count, walls, tags, restarts
 - Song name, artist, and BPM (by following the song link)
 """
+import re
+import re
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import requests
@@ -21,7 +23,9 @@ import time
 from csv_writer import CSVDatabase
 
 DEFAULT_CSV = os.path.join(os.path.expanduser("~"), "dances.csv")
-DEFAULT_FIELDS = ["name", "level", "choreographers", "release_date", "songs", "notes", "copperknob_id", "priority", "known", "category", "other_info", "frequency"]
+
+import re
+DEFAULT_FIELDS = ["name", "aka", "level", "choreographers", "release_date", "songs", "notes", "copperknob_id", "priority", "known", "category", "other_info", "frequency"]
 
 
 class CopperknobImporter:
@@ -50,6 +54,7 @@ class CopperknobImporter:
             data = {
                 'url': url,
                 'dance_name': None,
+                'aka': '',
                 'choreographers': [],  # List of dicts: [{'name': 'John Doe', 'location': 'USA'}, ...]
                 'release_date': None,
                 'level': None,
@@ -60,6 +65,15 @@ class CopperknobImporter:
                 'songs': [],  # List of song dicts with all fields
                 'notes': ''
             }
+            # Extract AKA (alternate name) from the dance name if present
+            # e.g., "Saddle Up Shawty aka Hip Hop Twist"
+            if data['dance_name']:
+                aka_match = re.search(r'\baka\s+(.+)$', data['dance_name'], re.I)
+                if aka_match:
+                    aka = aka_match.group(1).strip()
+                    # Remove "aka ..." from dance_name
+                    data['aka'] = aka
+                    data['dance_name'] = re.sub(r'\s*aka\s+.+$', '', data['dance_name'], flags=re.I).strip()
             
             # Get page text for pattern matching
             page_text = soup.get_text()
@@ -498,6 +512,8 @@ class CopperknobImportGUI(tk.Tk):
         self.importer = CopperknobImporter()
         self.db = CSVDatabase(DEFAULT_CSV, DEFAULT_FIELDS)
         self.extracted_data = None
+        # Hidden AKA field
+        self.aka_var = tk.StringVar()
 
         self._build_ui()
     
@@ -535,7 +551,12 @@ class CopperknobImportGUI(tk.Tk):
         dance_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
         ttk.Label(dance_row, text="Dance Name:", width=13).pack(side=tk.LEFT, padx=(0, 5))
         self.dance_name_var = tk.StringVar()
-        ttk.Entry(dance_row, textvariable=self.dance_name_var, width=45).pack(side=tk.LEFT)
+        # Dedicated frame for dance name input (Entry/Combobox)
+        self.dance_name_input_frame = ttk.Frame(dance_row)
+        self.dance_name_input_frame.pack(side=tk.LEFT)
+        self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=45)
+        # By default, show the entry so the user always sees a text box on startup
+        self.dance_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         
         # Count field in same row
         ttk.Label(dance_row, text="Count:", width=7, anchor=tk.E).pack(side=tk.LEFT, padx=(5, 3))
@@ -621,7 +642,15 @@ class CopperknobImportGUI(tk.Tk):
         self.frequency_combo.pack(side=tk.LEFT)
         self._setup_combobox_behavior(self.frequency_combo, self.frequency_var)
         row += 1
-        
+        row += 1
+
+        # Notes label and ScrolledText widget
+        notes_row = ttk.Frame(data_frame)
+        notes_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
+        ttk.Label(notes_row, text="Notes:", width=13).pack(side=tk.LEFT, padx=(0, 5))
+        self.notes_text = scrolledtext.ScrolledText(notes_row, width=90, height=3, wrap=tk.WORD)
+        self.notes_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        row += 1
 
         # Buttons row
         button_row = ttk.Frame(data_frame)
@@ -654,7 +683,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Checkbutton(checkbox_frame, text="Old Dance", variable=self.other_info_old).pack(side=tk.LEFT, padx=2)
 
         row += 1
-        
+
         # Song section with list on left and details on right
         ttk.Separator(data_frame, orient=tk.HORIZONTAL).grid(row=row, column=0, columnspan=2, sticky=tk.EW, pady=10)
         row += 1
@@ -1144,6 +1173,13 @@ class CopperknobImportGUI(tk.Tk):
         pass
     
     def _fetch_data(self):
+        global re
+        # DEBUG: Check if 're' is available
+        try:
+            print(f"DEBUG: re module is {re}")
+        except Exception as e:
+            print(f"DEBUG: re is not available: {e}")
+            raise ImportError("re module is not available in _fetch_data")
         """Fetch and parse data from the provided URL."""
         url = self.url_var.get().strip()
         if not url:
@@ -1166,7 +1202,47 @@ class CopperknobImportGUI(tk.Tk):
                 return
             
             # Populate the form fields
-            self.dance_name_var.set(data.get('dance_name') or '')
+            # Determine all possible names (main + aka), splitting main_name on 'Aka' as well
+            main_name = data.get('dance_name') or ''
+            aka = data.get('aka', '')
+            print(f"DEBUG: main_name='{main_name}', aka='{aka}'")
+            all_names = []
+            # Split main_name on 'Aka' (case-insensitive) and other delimiters
+            main_name_split = [n.strip() for n in re.split(r',|/|;|\band\b|\baka\b', main_name, flags=re.IGNORECASE) if n.strip()]
+            print(f"DEBUG: main_name_split after split: {main_name_split}")
+            all_names.extend(main_name_split)
+            if aka:
+                aka_names = [n.strip() for n in re.split(r',|/|;|\band\b|\baka\b', aka, flags=re.IGNORECASE) if n.strip()]
+                print(f"DEBUG: aka_names after split: {aka_names}")
+                all_names.extend(aka_names)
+            # Remove duplicates, preserve order
+            seen = set()
+            unique_names = []
+            for n in all_names:
+                if n and n not in seen:
+                    unique_names.append(n)
+                    seen.add(n)
+            print(f"DEBUG: unique_names for dropdown: {unique_names}")
+
+            # Remove all widgets from the input frame
+            for widget in self.dance_name_input_frame.winfo_children():
+                widget.destroy()
+            # Always use a new StringVar for dance_name_var to avoid stale bindings
+            new_dance_name_var = tk.StringVar()
+            if len(unique_names) > 1:
+                print("DEBUG: Switching to dropdown for dance name")
+                new_dance_name_var.set(unique_names[0])
+                self.dance_name_combo = ttk.Combobox(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43, state='readonly')
+                self.dance_name_combo['values'] = unique_names
+                self.dance_name_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                self._setup_combobox_behavior(self.dance_name_combo, new_dance_name_var)
+            else:
+                print("DEBUG: Using entry for dance name")
+                new_dance_name_var.set(unique_names[0] if unique_names else '')
+                self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=new_dance_name_var, width=45)
+                self.dance_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+            self.dance_name_var = new_dance_name_var
+            self.aka_var.set(aka)
             
             # Format choreographers as "Name (Location), Name2 (Location2)"
             choreo_list = data.get('choreographers', [])
@@ -1325,6 +1401,7 @@ class CopperknobImportGUI(tk.Tk):
         
         record = {
             'name': dance_name,
+            'aka': self.aka_var.get().strip(),
             'level': self.level_var.get().strip(),
             'choreographers': json.dumps(choreographers),
             'release_date': self.release_date_var.get().strip(),
@@ -1378,6 +1455,12 @@ class CopperknobImportGUI(tk.Tk):
             messagebox.showerror("Save Error", f"Failed to save: {e}")
     
     def _clear_form(self):
+        # Revert dance name input to Entry (text box)
+        for widget in self.dance_name_input_frame.winfo_children():
+            widget.destroy()
+        self.dance_name_var = tk.StringVar()
+        self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=45)
+        self.dance_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
         """Clear all form fields."""
         self.url_var.set('')
         self.dance_name_var.set('')
@@ -1413,7 +1496,16 @@ class CopperknobImportGUI(tk.Tk):
     def _open_main_gui(self):
         """Open the main dance management GUI."""
         import subprocess
-        subprocess.Popen(['.venv/bin/python', 'dance_gui.py'])
+        import sys
+        import os
+        # Find the absolute path to dance_gui.py in the same project (assume src/dance_gui.py)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        gui_path = os.path.join(project_root, 'src', 'dance_gui.py')
+        if not os.path.exists(gui_path):
+            from tkinter import messagebox
+            messagebox.showerror("Not Found", f"Could not find main GUI at {gui_path}")
+            return
+        subprocess.Popen([sys.executable, gui_path])
 
 
 def main():
