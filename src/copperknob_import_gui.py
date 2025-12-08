@@ -566,7 +566,7 @@ class CopperknobImportGUI(tk.Tk):
         self.count_var = tk.StringVar()
         ttk.Entry(dance_row, textvariable=self.count_var, width=10).grid(row=0, column=3, sticky=tk.W)
         # Priority label and combobox
-        ttk.Label(dance_row, text="Priority:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
+        ttk.Label(dance_row, text="Priority:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(0, 3), sticky=tk.E)
         self.priority_var = tk.StringVar()
         self.priority_combo = ttk.Combobox(dance_row, textvariable=self.priority_var, width=12, values=[
             "", "Highest", "High", "Medium", "Low", "Lowest", "Never"
@@ -592,7 +592,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(choreo_row, text="Wall:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.walls_var = tk.StringVar()
         ttk.Entry(choreo_row, textvariable=self.walls_var, width=10).grid(row=0, column=3, sticky=tk.W)
-        ttk.Label(choreo_row, text="Known?:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
+        ttk.Label(choreo_row, text="Known?:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(0, 3), sticky=tk.E)
         self.known_var = tk.StringVar()
         self.known_combo = ttk.Combobox(choreo_row, textvariable=self.known_var, width=12, values=[
             "", "Yes", "No", "Partially", "On the floor"
@@ -616,7 +616,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(release_row, text="Tags:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.tags_var = tk.StringVar()
         ttk.Entry(release_row, textvariable=self.tags_var, width=10).grid(row=0, column=3, sticky=tk.W)
-        ttk.Label(release_row, text="Category:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
+        ttk.Label(release_row, text="Category:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(0, 3), sticky=tk.E)
         self.category_var = tk.StringVar()
         self.category_combo = ttk.Combobox(release_row, textvariable=self.category_var, width=12, values=[
             "", "Learn next", "Learn soon", "Learn later"
@@ -644,7 +644,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Label(level_row, text="Restarts:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.restarts_var = tk.StringVar()
         ttk.Entry(level_row, textvariable=self.restarts_var, width=10).grid(row=0, column=3, sticky=tk.W)
-        ttk.Label(level_row, text="Frequency:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
+        ttk.Label(level_row, text="Frequency:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(0, 3), sticky=tk.E)
         self.frequency_var = tk.StringVar()
         self.frequency_combo = ttk.Combobox(level_row, textvariable=self.frequency_var, width=12, values=[
             "", "Never", "Once", "Rarely", "Sometimes", "Usually", "Always"
@@ -656,35 +656,32 @@ class CopperknobImportGUI(tk.Tk):
         row += 1
         row += 1
 
-        # Notes label and ScrolledText widget
-        notes_row = ttk.Frame(data_frame)
-        notes_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
-        ttk.Label(notes_row, text="Notes:", width=13).pack(side=tk.LEFT, padx=(0, 5))
-        self.notes_text = scrolledtext.ScrolledText(notes_row, width=90, height=3, wrap=tk.WORD)
-        self.notes_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        row += 1
 
-        # Buttons row
+
+        # Buttons and Other Info row (use grid for alignment)
         button_row = ttk.Frame(data_frame)
         button_row.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=3)
 
         self.stepsheet_url = ""
         self.copperknob_id = None  # Hidden field to track unique dance ID
         self.stepsheet_button = ttk.Button(button_row, text="Open in Copperknob", command=self._open_stepsheet, width=18)
-        self.stepsheet_button.pack(side=tk.LEFT, padx=(0, 5))
+        self.stepsheet_button.grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
         self.stepsheet_button.config(state='disabled')
 
         self.pdf_url = ""
         self.pdf_path = None  # Track downloaded PDF path
         self.pdf_button = ttk.Button(button_row, text="Download PDF", command=self._download_pdf, width=12)
-        self.pdf_button.pack(side=tk.LEFT)
+        self.pdf_button.grid(row=0, column=1, padx=(0, 20), sticky=tk.W)
         self.pdf_button.config(state='disabled')
 
-        # Other Info multi-select field, immediately to the left after buttons
-        # Adjust horizontal space so 'Other Info' aligns with last column
+
+        # Other Info multi-select field, aligned under 'Frequency' (column 5 in previous rows)
+        # The horizontal offset should match the left edge of the 'Frequency' label above
+        # The 'Frequency' label is at column=4, with a fixed width and some padding
+        # Empirically, a padx of about 275 aligns with the 'Frequency' label (adjust as needed)
         other_info_row = ttk.Frame(button_row)
-        other_info_row.pack(side=tk.LEFT, padx=(376, 0))
-        ttk.Label(other_info_row, text="Other Info:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(2, 3))
+        other_info_row.grid(row=0, column=2, sticky=tk.W, padx=(275, 0))
+        ttk.Label(other_info_row, text="Other Info:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(0, 3))
         checkbox_frame = ttk.Frame(other_info_row)
         checkbox_frame.pack(side=tk.LEFT)
         self.other_info_practice = tk.BooleanVar()
@@ -693,6 +690,11 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Checkbutton(checkbox_frame, text="Practice", variable=self.other_info_practice).pack(side=tk.LEFT, padx=2)
         ttk.Checkbutton(checkbox_frame, text="Learn", variable=self.other_info_learn).pack(side=tk.LEFT, padx=2)
         ttk.Checkbutton(checkbox_frame, text="Old Dance", variable=self.other_info_old).pack(side=tk.LEFT, padx=2)
+
+        # Optionally, configure grid weights for spacing
+        button_row.grid_columnconfigure(0, weight=0)
+        button_row.grid_columnconfigure(1, weight=0)
+        button_row.grid_columnconfigure(2, weight=1)
 
         row += 1
 
