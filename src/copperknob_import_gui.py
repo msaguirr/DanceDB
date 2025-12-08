@@ -546,101 +546,113 @@ class CopperknobImportGUI(tk.Tk):
         # Create a grid for the extracted data
         row = 0
         
-        # Dance name - inline with Count on right
+        # Dance name row - use grid for all widgets for fixed, independent positions
         dance_row = ttk.Frame(data_frame)
         dance_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
-        ttk.Label(dance_row, text="Dance Name:", width=13).pack(side=tk.LEFT, padx=(0, 5))
-        self.dance_name_var = tk.StringVar()
+        # Label
+        ttk.Label(dance_row, text="Dance Name:", width=13).grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
         # Dedicated frame for dance name input (Entry/Combobox)
-        self.dance_name_input_frame = ttk.Frame(dance_row)
-        self.dance_name_input_frame.pack(side=tk.LEFT)
-        self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=45)
-        # By default, show the entry so the user always sees a text box on startup
-        self.dance_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        # Count field in same row
-        ttk.Label(dance_row, text="Count:", width=7, anchor=tk.E).pack(side=tk.LEFT, padx=(5, 3))
+        self.dance_name_var = tk.StringVar()
+        # Fixed pixel width for dance name input frame (matches Entry width=45 and Combobox width=43)
+        DANCE_NAME_INPUT_WIDTH = 340  # px, adjust as needed for your font/UI
+        self.dance_name_input_frame = ttk.Frame(dance_row, width=DANCE_NAME_INPUT_WIDTH)
+        self.dance_name_input_frame.grid(row=0, column=1, sticky="nsew")
+        self.dance_name_input_frame.grid_propagate(False)  # Prevent frame from resizing to contents
+        self.dance_name_input_frame.grid_columnconfigure(0, minsize=DANCE_NAME_INPUT_WIDTH, weight=1)
+        self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=43)
+        self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
+        # Count label and entry
+        ttk.Label(dance_row, text="Count:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.count_var = tk.StringVar()
-        ttk.Entry(dance_row, textvariable=self.count_var, width=10).pack(side=tk.LEFT)
-        
-        # Priority field in same row (third column)
-        ttk.Label(dance_row, text="Priority:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
+        ttk.Entry(dance_row, textvariable=self.count_var, width=10).grid(row=0, column=3, sticky=tk.W)
+        # Priority label and combobox
+        ttk.Label(dance_row, text="Priority:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
         self.priority_var = tk.StringVar()
         self.priority_combo = ttk.Combobox(dance_row, textvariable=self.priority_var, width=12, values=[
             "", "Highest", "High", "Medium", "Low", "Lowest", "Never"
         ], state='readonly', takefocus=0)
-        self.priority_combo.pack(side=tk.LEFT)
+        self.priority_combo.grid(row=0, column=5, sticky=tk.W)
         self._setup_combobox_behavior(self.priority_combo, self.priority_var)
+        # Configure grid weights for fixed layout
+        for i in range(6):
+            dance_row.grid_columnconfigure(i, weight=0)
         row += 1
         
-        # Choreographer(s) - display as formatted string
+        # Choreographer(s) row - align with dance name row columns
         choreo_row = ttk.Frame(data_frame)
         choreo_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
-        ttk.Label(choreo_row, text="Choreographer(s):", width=13).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(choreo_row, text="Choreographer(s):", width=13).grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
         self.choreographer_var = tk.StringVar()
-        ttk.Entry(choreo_row, textvariable=self.choreographer_var, width=45).pack(side=tk.LEFT)
-        
-        # Wall field in same row
-        ttk.Label(choreo_row, text="Wall:", width=7, anchor=tk.E).pack(side=tk.LEFT, padx=(5, 3))
+        # Match dance name input frame width and grid
+        choreo_input_frame = ttk.Frame(choreo_row, width=340)
+        choreo_input_frame.grid(row=0, column=1, sticky="nsew")
+        choreo_input_frame.grid_propagate(False)
+        choreo_input_frame.grid_columnconfigure(0, minsize=340, weight=1)
+        ttk.Entry(choreo_input_frame, textvariable=self.choreographer_var, width=43).grid(row=0, column=0, sticky="nsew")
+        ttk.Label(choreo_row, text="Wall:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.walls_var = tk.StringVar()
-        ttk.Entry(choreo_row, textvariable=self.walls_var, width=10).pack(side=tk.LEFT)
-        
-        # Known? field in same row (third column)
-        ttk.Label(choreo_row, text="Known?:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
+        ttk.Entry(choreo_row, textvariable=self.walls_var, width=10).grid(row=0, column=3, sticky=tk.W)
+        ttk.Label(choreo_row, text="Known?:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
         self.known_var = tk.StringVar()
         self.known_combo = ttk.Combobox(choreo_row, textvariable=self.known_var, width=12, values=[
             "", "Yes", "No", "Partially", "On the floor"
         ], state='readonly', takefocus=0)
-        self.known_combo.pack(side=tk.LEFT)
+        self.known_combo.grid(row=0, column=5, sticky=tk.W)
         self._setup_combobox_behavior(self.known_combo, self.known_var)
+        for i in range(6):
+            choreo_row.grid_columnconfigure(i, weight=0)
         row += 1
         
-        # Release Date
+        # Release Date row - align with dance name row columns
         release_row = ttk.Frame(data_frame)
         release_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
-        ttk.Label(release_row, text="Release Date:", width=13).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(release_row, text="Release Date:", width=13).grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
         self.release_date_var = tk.StringVar()
-        ttk.Entry(release_row, textvariable=self.release_date_var, width=45).pack(side=tk.LEFT)
-        
-        # Tags field in same row
-        ttk.Label(release_row, text="Tags:", width=7, anchor=tk.E).pack(side=tk.LEFT, padx=(5, 3))
+        release_input_frame = ttk.Frame(release_row, width=340)
+        release_input_frame.grid(row=0, column=1, sticky="nsew")
+        release_input_frame.grid_propagate(False)
+        release_input_frame.grid_columnconfigure(0, minsize=340, weight=1)
+        ttk.Entry(release_input_frame, textvariable=self.release_date_var, width=43).grid(row=0, column=0, sticky="nsew")
+        ttk.Label(release_row, text="Tags:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.tags_var = tk.StringVar()
-        ttk.Entry(release_row, textvariable=self.tags_var, width=10).pack(side=tk.LEFT)
-        
-        # Category field in same row (third column)
-        ttk.Label(release_row, text="Category:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
+        ttk.Entry(release_row, textvariable=self.tags_var, width=10).grid(row=0, column=3, sticky=tk.W)
+        ttk.Label(release_row, text="Category:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
         self.category_var = tk.StringVar()
         self.category_combo = ttk.Combobox(release_row, textvariable=self.category_var, width=12, values=[
             "", "Learn next", "Learn soon", "Learn later"
         ], state='readonly', takefocus=0)
-        self.category_combo.pack(side=tk.LEFT)
+        self.category_combo.grid(row=0, column=5, sticky=tk.W)
         self._setup_combobox_behavior(self.category_combo, self.category_var)
+        for i in range(6):
+            release_row.grid_columnconfigure(i, weight=0)
         row += 1
         
-        # Level
+        # Level row - align with dance name row columns
         level_row = ttk.Frame(data_frame)
         level_row.grid(row=row, column=0, columnspan=3, sticky=tk.W, pady=3)
-        ttk.Label(level_row, text="Level:", width=13).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Label(level_row, text="Level:", width=13).grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
         self.level_var = tk.StringVar()
-        self.level_combo = ttk.Combobox(level_row, textvariable=self.level_var, width=43, values=[
+        level_input_frame = ttk.Frame(level_row, width=340)
+        level_input_frame.grid(row=0, column=1, sticky="nsew")
+        level_input_frame.grid_propagate(False)
+        level_input_frame.grid_columnconfigure(0, minsize=340, weight=1)
+        self.level_combo = ttk.Combobox(level_input_frame, textvariable=self.level_var, width=43, values=[
             "", "Absolute Beginner", "Beginner", "Improver", "Intermediate", "Advanced"
         ], state='readonly', takefocus=0)
-        self.level_combo.pack(side=tk.LEFT)
+        self.level_combo.grid(row=0, column=0, sticky="nsew")
         self._setup_combobox_behavior(self.level_combo, self.level_var)
-        
-        # Restarts field in same row
-        ttk.Label(level_row, text="Restarts:", width=7, anchor=tk.E).pack(side=tk.LEFT, padx=(5, 3))
+        ttk.Label(level_row, text="Restarts:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.restarts_var = tk.StringVar()
-        ttk.Entry(level_row, textvariable=self.restarts_var, width=10).pack(side=tk.LEFT)
-        
-        # Frequency field in same row (third column)
-        ttk.Label(level_row, text="Frequency:", width=8, anchor=tk.E).pack(side=tk.LEFT, padx=(10, 3))
+        ttk.Entry(level_row, textvariable=self.restarts_var, width=10).grid(row=0, column=3, sticky=tk.W)
+        ttk.Label(level_row, text="Frequency:", width=8, anchor=tk.E).grid(row=0, column=4, padx=(10, 3), sticky=tk.E)
         self.frequency_var = tk.StringVar()
         self.frequency_combo = ttk.Combobox(level_row, textvariable=self.frequency_var, width=12, values=[
             "", "Never", "Once", "Rarely", "Sometimes", "Usually", "Always"
         ], state='readonly', takefocus=0)
-        self.frequency_combo.pack(side=tk.LEFT)
+        self.frequency_combo.grid(row=0, column=5, sticky=tk.W)
         self._setup_combobox_behavior(self.frequency_combo, self.frequency_var)
+        for i in range(6):
+            level_row.grid_columnconfigure(i, weight=0)
         row += 1
         row += 1
 
@@ -1234,13 +1246,13 @@ class CopperknobImportGUI(tk.Tk):
                 new_dance_name_var.set(unique_names[0])
                 self.dance_name_combo = ttk.Combobox(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43, state='readonly')
                 self.dance_name_combo['values'] = unique_names
-                self.dance_name_combo.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                self.dance_name_combo.grid(row=0, column=0, sticky="nsew")
                 self._setup_combobox_behavior(self.dance_name_combo, new_dance_name_var)
             else:
                 print("DEBUG: Using entry for dance name")
                 new_dance_name_var.set(unique_names[0] if unique_names else '')
-                self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=new_dance_name_var, width=45)
-                self.dance_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43)
+                self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
             self.dance_name_var = new_dance_name_var
             self.aka_var.set(aka)
             
@@ -1459,8 +1471,8 @@ class CopperknobImportGUI(tk.Tk):
         for widget in self.dance_name_input_frame.winfo_children():
             widget.destroy()
         self.dance_name_var = tk.StringVar()
-        self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=45)
-        self.dance_name_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=43)
+        self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
         """Clear all form fields."""
         self.url_var.set('')
         self.dance_name_var.set('')
