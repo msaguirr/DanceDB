@@ -20,7 +20,7 @@ import json
 import os
 import tempfile
 import time
-from csv_writer import CSVDatabase
+from sqlite_database import SQLiteDatabase
 
 DEFAULT_CSV = os.path.join(os.path.expanduser("~"), "dances.csv")
 
@@ -492,7 +492,20 @@ class CopperknobImporter:
 
 class CopperknobImportGUI(tk.Tk):
     """GUI for importing dances from Copperknob."""
-    
+
+    def _open_db_viewer(self):
+        import subprocess
+        import sys
+        import os
+        # Find the absolute path to dance_db_viewer.py in the same project (assume src/dance_db_viewer.py)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        viewer_path = os.path.join(project_root, 'src', 'dance_db_viewer.py')
+        if not os.path.exists(viewer_path):
+            from tkinter import messagebox
+            messagebox.showerror("Not Found", f"Could not find database viewer at {viewer_path}")
+            return
+        subprocess.Popen([sys.executable, viewer_path])
+
     def __init__(self):
         super().__init__()
         self.title("Import from Copperknob")
@@ -510,7 +523,7 @@ class CopperknobImportGUI(tk.Tk):
                         highlightbackground='white', highlightcolor='white', bordercolor='white')
 
         self.importer = CopperknobImporter()
-        self.db = CSVDatabase(DEFAULT_CSV, DEFAULT_FIELDS)
+        self.db = SQLiteDatabase()
         self.extracted_data = None
         # Hidden AKA field
         self.aka_var = tk.StringVar()
@@ -805,7 +818,13 @@ class CopperknobImportGUI(tk.Tk):
         
         ttk.Button(btn_frame, text="Save to Database", command=self._save_to_db).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="Clear Form", command=self._clear_form).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="View Database", command=self._open_db_viewer).pack(side=tk.RIGHT, padx=5)
         ttk.Button(btn_frame, text="Open Main GUI", command=self._open_main_gui).pack(side=tk.RIGHT, padx=5)
+        def _open_db_viewer(self):
+            import subprocess
+            import sys
+            # Launch the database viewer as a separate process
+            subprocess.Popen([sys.executable, os.path.join(os.path.dirname(__file__), 'dance_db_viewer.py')])
         
         # Track editing state
         self.songs_editable = False
@@ -1413,13 +1432,18 @@ class CopperknobImportGUI(tk.Tk):
         if self.other_info_old.get():
             other_info_items.append("Old Dance")
         
+        # Handle notes field gracefully if notes_text widget is missing
+        try:
+            notes_val = self.notes_text.get('1.0', 'end-1c')
+        except AttributeError:
+            notes_val = ''
         record = {
             'name': dance_name,
             'aka': self.aka_var.get().strip(),
             'level': self.level_var.get().strip(),
             'choreographers': json.dumps(choreographers),
             'release_date': self.release_date_var.get().strip(),
-            'notes': self.notes_text.get('1.0', 'end-1c'),
+            'notes': notes_val,
             'copperknob_id': self.copperknob_id if self.copperknob_id else '',
             'priority': self.priority_var.get().strip(),
             'known': self.known_var.get().strip(),
