@@ -8,13 +8,10 @@ This tool allows you to paste a Copperknob URL and automatically extract:
 - Count, walls, tags, restarts
 - Song name, artist, and BPM (by following the song link)
 """
-import re
-import re
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import requests
 from bs4 import BeautifulSoup
-import re
 from typing import Optional, Dict
 import json
 import os
@@ -29,7 +26,7 @@ DEFAULT_FIELDS = ["name", "aka", "level", "choreographers", "release_date", "son
 
 
 class CopperknobImporter:
-    """Scrape dance and song data from Copperknob step sheets."""
+    """Scrapes dance and song data from Copperknob step sheets."""
     
     def __init__(self):
         self.session = requests.Session()
@@ -67,40 +64,29 @@ class CopperknobImporter:
             }
             # Extract AKA (alternate name) from the dance name if present
             # e.g., "Saddle Up Shawty aka Hip Hop Twist"
+            # Always use the full dance name as main name.
             if data['dance_name']:
-                aka_match = re.search(r'\baka\s+(.+)$', data['dance_name'], re.I)
-                if aka_match:
-                    aka = aka_match.group(1).strip()
-                    # Remove "aka ..." from dance_name
-                    data['aka'] = aka
-                    data['dance_name'] = re.sub(r'\s*aka\s+.+$', '', data['dance_name'], flags=re.I).strip()
-            
-            # Get page text for pattern matching
+                data['aka'] = ''
             page_text = soup.get_text()
-            
-            # Extract dance name - it's displayed prominently on the page
-            # Try multiple methods to find it
-            
-            # Method 1: Look for the first h1 tag (usually the dance name on Copperknob)
+            # Extract dance name - it's displayed prominently on the page. Try multiple methods to find it.
             h1_tag = soup.find('h1')
             if h1_tag:
                 potential_name = h1_tag.get_text(strip=True)
                 # Make sure it's not a generic page title
                 if potential_name and 'stepsheet' not in potential_name.lower() and 'copperknob' not in potential_name.lower():
                     data['dance_name'] = potential_name
+                    data['aka'] = ''
                     print(f"DEBUG: Found dance name in h1: {data['dance_name']}")
-            
             # Method 2: Look for the dance name from URL as last resort
             if not data['dance_name']:
-                # Extract from URL: /stepsheets/109973/more-dessert -> "More Dessert"
                 import re
                 url_match = re.search(r'/stepsheets/\d+/([^/?]+)', url)
                 if url_match:
                     url_name = url_match.group(1).replace('-', ' ').title()
                     data['dance_name'] = url_name
+                    data['aka'] = ''
                     print(f"DEBUG: Extracted dance name from URL: {data['dance_name']}")
-            
-            # Look for structured data sections - Copperknob typically has labeled fields
+            # Look for structured data sections - Copperknob typically has labeled fields for choreographer(s) and release date.
             
             # Extract choreographer(s) with location(s) and release date
             # The format on Copperknob is: "Choreographer: Name (Location) & Name2 (Location2) - Date"
@@ -491,6 +477,12 @@ class CopperknobImporter:
 
 
 class CopperknobImportGUI(tk.Tk):
+    def _paste_event(self, entry_widget):
+        """Handle paste event for entry widgets."""
+        try:
+            entry_widget.event_generate('<<Paste>>')
+        except Exception:
+            pass
     """GUI for importing dances from Copperknob."""
 
     def _open_db_viewer(self):
@@ -547,6 +539,7 @@ class CopperknobImportGUI(tk.Tk):
         self.url_entry = ttk.Entry(url_input_frame, textvariable=self.url_var, width=60)
         self.url_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
         self.url_entry.bind('<Return>', lambda e: self._fetch_data())
+        # No custom paste bindings; native paste works
         
         self.fetch_btn = ttk.Button(url_input_frame, text="Fetch Data", command=self._fetch_data)
         self.fetch_btn.pack(side=tk.LEFT)
@@ -574,6 +567,7 @@ class CopperknobImportGUI(tk.Tk):
         self.dance_name_input_frame.grid_columnconfigure(0, minsize=DANCE_NAME_INPUT_WIDTH, weight=1)
         self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=self.dance_name_var, width=43)
         self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
+        # No custom paste bindings; native paste works
         # Count label and entry
         ttk.Label(dance_row, text="Count:", width=7, anchor=tk.E).grid(row=0, column=2, padx=(10, 3), sticky=tk.E)
         self.count_var = tk.StringVar()
@@ -830,12 +824,16 @@ class CopperknobImportGUI(tk.Tk):
         self.songs_editable = False
     
     def _setup_combobox_behavior(self, combo, var):
-        """Custom Combobox: empty option only in entry, not menu."""
+        """Customizes Combobox: empty option only in entry, not menu."""
         # Remove empty string from values if present
         values = list(combo.cget('values'))
         if values and values[0] == "":
             values = values[1:]
             combo['values'] = values
+
+        combo._stored_value = ''
+        combo._dropdown_open = False
+        combo._entry_cleared = False
 
         combo._stored_value = ''
         combo._dropdown_open = False
@@ -1235,47 +1233,20 @@ class CopperknobImportGUI(tk.Tk):
                 return
             
             # Populate the form fields
-            # Determine all possible names (main + aka), splitting main_name on 'Aka' as well
+            # Always use the full dance name as a single entry, no splitting
             main_name = data.get('dance_name') or ''
-            aka = data.get('aka', '')
-            print(f"DEBUG: main_name='{main_name}', aka='{aka}'")
-            all_names = []
-            # Split main_name on 'Aka' (case-insensitive) and other delimiters
-            main_name_split = [n.strip() for n in re.split(r',|/|;|\band\b|\baka\b', main_name, flags=re.IGNORECASE) if n.strip()]
-            print(f"DEBUG: main_name_split after split: {main_name_split}")
-            all_names.extend(main_name_split)
-            if aka:
-                aka_names = [n.strip() for n in re.split(r',|/|;|\band\b|\baka\b', aka, flags=re.IGNORECASE) if n.strip()]
-                print(f"DEBUG: aka_names after split: {aka_names}")
-                all_names.extend(aka_names)
-            # Remove duplicates, preserve order
-            seen = set()
-            unique_names = []
-            for n in all_names:
-                if n and n not in seen:
-                    unique_names.append(n)
-                    seen.add(n)
-            print(f"DEBUG: unique_names for dropdown: {unique_names}")
-
+            print(f"DEBUG: main_name='{main_name}'")
             # Remove all widgets from the input frame
             for widget in self.dance_name_input_frame.winfo_children():
                 widget.destroy()
             # Always use a new StringVar for dance_name_var to avoid stale bindings
             new_dance_name_var = tk.StringVar()
-            if len(unique_names) > 1:
-                print("DEBUG: Switching to dropdown for dance name")
-                new_dance_name_var.set(unique_names[0])
-                self.dance_name_combo = ttk.Combobox(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43, state='readonly')
-                self.dance_name_combo['values'] = unique_names
-                self.dance_name_combo.grid(row=0, column=0, sticky="nsew")
-                self._setup_combobox_behavior(self.dance_name_combo, new_dance_name_var)
-            else:
-                print("DEBUG: Using entry for dance name")
-                new_dance_name_var.set(unique_names[0] if unique_names else '')
-                self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43)
-                self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
+            new_dance_name_var.set(main_name)
+            self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43)
+            self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
+            print("DEBUG: Using entry for dance name")
             self.dance_name_var = new_dance_name_var
-            self.aka_var.set(aka)
+            self.aka_var.set(data.get('aka', ''))
             
             # Format choreographers as "Name (Location), Name2 (Location2)"
             choreo_list = data.get('choreographers', [])
