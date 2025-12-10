@@ -51,34 +51,43 @@ class DanceDBViewer(tk.Tk):
         main_frame = ttk.Frame(self)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        left_frame = ttk.Frame(main_frame, width=880)
-        left_frame.pack(side=tk.LEFT, fill=tk.Y)
-        left_frame.pack_propagate(False)
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+        main_frame.rowconfigure(0, weight=0)  # search bar row
+        main_frame.rowconfigure(1, weight=1)  # main content row
 
-        search_frame = ttk.Frame(left_frame)
-        search_frame.pack(fill=tk.X, padx=8, pady=6)
+
+        # Search bar now above both frames
+        search_frame = ttk.Frame(main_frame)
+        search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
         ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT)
         search_entry = ttk.Entry(search_frame, textvariable=self.search_var, width=40)
         search_entry.pack(side=tk.LEFT, padx=4)
         ttk.Button(search_frame, text="Search", command=self._load_data).pack(side=tk.LEFT, padx=8)
         search_entry.bind('<Return>', lambda e: self._load_data())
+        ttk.Button(search_frame, text="Delete Selected", command=self._delete_selected_row).pack(side=tk.LEFT, padx=8)
+
+        left_frame = ttk.Frame(main_frame)
+        left_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
+        left_frame.grid_propagate(True)
+
+        right_frame = ttk.Frame(main_frame)
+        right_frame.grid(row=1, column=1, sticky="nsew", padx=0, pady=0)
+        right_frame.grid_propagate(True)
 
         self.tree = ttk.Treeview(left_frame, columns=("name", "level", "priority", "category", "songs"), show="headings")
         import tkinter.font as tkfont
-        # Use TkDefaultFont for measurement (ttk.Treeview does not support -font option)
         tree_font = tkfont.nametofont("TkDefaultFont")
-        # Use the actual dropdown lists from the main dance information comboboxes
         priority_options = ["", "Highest", "High", "Medium", "Low", "Lowest", "Never"]
         category_options = ["", "Learn next", "Learn soon", "Learn later"]
-        # Level options from the main combobox (match actual dropdown values exactly)
         level_options = ["", "Absolute Beginner", "Beginner", "Improver", "Intermediate", "Advanced"]
         padding = 24
-        extra_level_padding = 40  # Make level column wider than others
+        extra_level_padding = 40
         priority_width = max(max(tree_font.measure(v) for v in priority_options), tree_font.measure("Priority")) + padding
         category_width = max(max(tree_font.measure(v) for v in category_options), tree_font.measure("Category")) + padding
         level_width = max(max(tree_font.measure(v) for v in level_options), tree_font.measure("Level")) + padding + extra_level_padding
         for col in self.tree["columns"]:
-            self.tree.heading(col, text=col.title(), command=lambda c=col: self._sort_by_column(c, False))
+            self.tree.heading(col, text=col.title())
             if col == "priority":
                 self.tree.column(col, width=priority_width, anchor=tk.W, minwidth=priority_width, stretch=False)
             elif col == "category":
@@ -89,12 +98,91 @@ class DanceDBViewer(tk.Tk):
                 self.tree.column(col, width=120, anchor=tk.W, stretch=True)
             else:
                 self.tree.column(col, width=120, anchor=tk.W, stretch=False)
-
-        # Save widths for later enforcement
         self._priority_width = priority_width
         self._category_width = category_width
         self._level_width = level_width
-        self.tree.pack(fill=tk.BOTH, expand=True)
+        left_frame.rowconfigure(0, weight=1)
+        left_frame.columnconfigure(0, weight=1)
+        right_frame.rowconfigure(0, weight=1)
+        right_frame.columnconfigure(0, weight=1)
+
+        self.tree.grid(row=0, column=0, sticky="nsew")
+
+        # Bind selection events after Treeview is placed
+        self.tree.bind("<<TreeviewSelect>>", self._on_row_select)
+        self.tree.bind("<Double-1>", self._on_row_double_click)
+        self.tree.bind("<ButtonRelease-1>", self._on_row_click)
+
+        # Details label (Text widget for multi-line info)
+        self.details_label = tk.Text(
+            right_frame,
+            wrap=tk.WORD,
+            state='disabled',
+            font=tree_font,
+            width=40,
+            padx=0,
+            pady=0,
+            borderwidth=0,
+            highlightthickness=0
+        )
+        self.details_label.grid(row=0, column=0, sticky="nsew", pady=(2,0))
+        self.details_label.config(state='normal')
+        self.details_label.delete('1.0', tk.END)
+        self.details_label.config(state='disabled')
+
+        # Notification label (non-blocking)
+        self.notification_label = ttk.Label(self, text="", foreground="green", font=tree_font)
+        self.notification_label.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=4)
+        
+    def _delete_selected_row(self):
+        item = self.tree.selection()
+        if not item:
+            messagebox.showwarning("Delete", "No row selected.")
+            return
+        db_id = item[0]
+        # Get dance name for confirmation
+        dance_name = self.tree.item(db_id, "values")[0] if self.tree.item(db_id, "values") else "this dance"
+        confirm_text = f"Delete '{dance_name}'?"
+        # Custom dialog with switched buttons
+        confirm_win = tk.Toplevel(self)
+        confirm_win.title("Confirm Delete")
+        confirm_win.transient(self)
+        confirm_win.grab_set()
+        ttk.Label(confirm_win, text=confirm_text, padding=16).pack(padx=16, pady=(16,8))
+        btn_frame = ttk.Frame(confirm_win)
+        btn_frame.pack(pady=(0,16))
+        def do_delete():
+            confirm_win.destroy()
+            self._actually_delete_row(db_id)
+        def do_cancel():
+            confirm_win.destroy()
+        ttk.Button(btn_frame, text="Delete", command=do_delete).pack(side=tk.LEFT, padx=8)
+        ttk.Button(btn_frame, text="Cancel", command=do_cancel).pack(side=tk.LEFT, padx=8)
+        confirm_win.update_idletasks()
+        # Center the popup over the main window
+        x = self.winfo_rootx() + (self.winfo_width() // 2) - (confirm_win.winfo_width() // 2)
+        y = self.winfo_rooty() + (self.winfo_height() // 2) - (confirm_win.winfo_height() // 2)
+        confirm_win.geometry(f"+{x}+{y}")
+        confirm_win.wait_window()
+        return
+
+    def _actually_delete_row(self, db_id):
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            c = conn.cursor()
+            c.execute("DELETE FROM dances WHERE id=?", (db_id,))
+            conn.commit()
+            conn.close()
+            # Only delete from Treeview if item exists
+            if db_id in self.tree.get_children():
+                self.tree.delete(db_id)
+            # Show non-blocking notification
+            self.notification_label.config(text="Row deleted successfully.")
+            self.after(2500, lambda: self.notification_label.config(text=""))
+        except Exception as e:
+            messagebox.showerror("Delete Error", f"Failed to delete row: {e}")
+
+        # Removed duplicate Treeview creation and column setup; Treeview is created in _build_ui
         # Details panel (right side)
         # Schedule column width enforcement after window is rendered
         self.after_idle(self._enforce_column_widths)
@@ -154,36 +242,33 @@ class DanceDBViewer(tk.Tk):
             messagebox.showerror("Error", f"Failed to load data: {e}")
 
     def _on_row_select(self, event):
-        # Resize window to show details panel
-        print("_on_row_select called")
-        print(f"event: {event}")
-        self.geometry("1200x550")
+        # Always show details panel, just clear/disable if nothing selected
         item = self.tree.selection()
-        print(f"item selection: {item}")
         if not item:
-            print("No item selected")
+            self.details_label.config(state='normal')
+            self.details_label.delete('1.0', tk.END)
+            self.details_label.config(state='disabled')
+            self.geometry("900x550")
             return
         db_id = item[0]
-        print(f"db_id to use: {db_id}")
+        self.details_label.config(state='normal')
+        self.details_label.delete('1.0', tk.END)
         try:
-            print(f"Selected db_id: {db_id}")
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
             c.execute("SELECT name, level, choreographers, release_date, priority, category, frequency, aka, notes, copperknob_id, songs FROM dances WHERE id=?", (db_id,))
             row = c.fetchone()
-            print(f"Fetched row: {row}")
             conn.close()
             if not row:
                 debug_msg = f"No row found for id={db_id}.\nCheck if the database and ids are correct."
-                if hasattr(self, 'details_label'):
-                    self.details_label.config(state='normal')
-                    self.details_label.delete('1.0', tk.END)
-                    self.details_label.insert(tk.END, debug_msg)
-                    self.details_label.config(state='disabled')
+                self.details_label.insert(tk.END, debug_msg)
+                self.details_label.config(state='disabled')
                 return
             (name, level, choreographers, release_date, priority, category, frequency, aka, notes, copperknob_id, songs_json) = row
-            details = f"Name: {name}\nLevel: {level}\nChoreographers: {choreographers}\nRelease Date: {release_date}\nPriority: {priority}\nCategory: {category}\nFrequency: {frequency}\nAKA: {aka}\nNotes: {notes}\nCopperknob ID: {copperknob_id}\n"
-            # Add songs
+            details = f"Name: {name}\nLevel: {level}\nChoreographers: {choreographers}\nRelease Date: {release_date}\nPriority: {priority}\nCategory: {category}\nFrequency: {frequency}\n"
+            if aka and aka.strip() and aka.strip().lower() != name.strip().lower():
+                details += f"AKA: {aka}\n"
+            details += f"Notes: {notes}\nCopperknob ID: {copperknob_id}\n"
             try:
                 import json
                 songs = json.loads(songs_json)
@@ -200,18 +285,12 @@ class DanceDBViewer(tk.Tk):
                         details += "\n"
             except Exception:
                 pass
-            if hasattr(self, 'details_label'):
-                self.details_label.config(state='normal')
-                self.details_label.delete('1.0', tk.END)
-                self.details_label.insert(tk.END, details)
-                self.details_label.config(state='disabled')
+            self.details_label.insert(tk.END, details)
+            self.details_label.config(state='disabled')
         except Exception as e:
             debug_msg = f"Error loading details for id={db_id}: {e}"
-            if hasattr(self, 'details_label'):
-                self.details_label.config(state='normal')
-                self.details_label.delete('1.0', tk.END)
-                self.details_label.insert(tk.END, debug_msg)
-                self.details_label.config(state='disabled')
+            self.details_label.insert(tk.END, debug_msg)
+            self.details_label.config(state='disabled')
 
     def _on_row_double_click(self, event):
         item = self.tree.selection()
