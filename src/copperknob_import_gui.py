@@ -9,32 +9,36 @@ This tool allows you to paste a Copperknob URL and automatically extract:
 - Song name, artist, and BPM (by following the song link)
 """
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import ttk, messagebox
 import requests
 from bs4 import BeautifulSoup
-from typing import Optional, Dict
 import json
 import os
-import tempfile
-import time
+import re
+
+from selenium.webdriver.firefox.webdriver import WebDriver
+
+from selenium.webdriver.support.wait import WebDriverWait
+
+from selenium.webdriver.remote.webelement import WebElement
 from sqlite_database import SQLiteDatabase
 
-DEFAULT_CSV = os.path.join(os.path.expanduser("~"), "dances.csv")
+DEFAULT_CSV: str = os.path.join(os.path.expanduser("~"), "dances.csv")
 
 import re
-DEFAULT_FIELDS = ["name", "aka", "level", "choreographers", "release_date", "songs", "notes", "copperknob_id", "priority", "known", "category", "other_info", "frequency"]
+DEFAULT_FIELDS: list[str] = ["name", "aka", "level", "choreographers", "release_date", "songs", "notes", "copperknob_id", "priority", "known", "category", "other_info", "frequency"]
 
 
 class CopperknobImporter:
     """Scrapes dance and song data from Copperknob step sheets."""
     
-    def __init__(self):
+    def __init__(self) -> None:
         self.session = requests.Session()
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
         })
     
-    def extract_dance_data(self, url: str) -> Optional[Dict]:
+    def extract_dance_data(self, url):
         """Extract dance information from a Copperknob step sheet URL.
         
         Args:
@@ -92,33 +96,33 @@ class CopperknobImporter:
             # The format on Copperknob is: "Choreographer: Name (Location) & Name2 (Location2) - Date"
             # Look for "Choreographer:" label and get the next line
             choreo_text = None
-            lines = page_text.split('\n')
+            lines: list[str] = page_text.split('\n')
             for i, line in enumerate(lines):
                 if re.match(r'^\s*Choreographer:\s*$', line, re.I):
                     # Get next non-empty line
                     for j in range(i+1, min(i+5, len(lines))):
-                        val = lines[j].strip()
+                        val: str = lines[j].strip()
                         if val:
-                            choreo_text = val
+                            choreo_text: str = val
                             break
                     break
             
             if choreo_text:
                 # Check if date is at the end: "Name (Location) & Name2 (Location2) - March 2016"
-                date_match = re.search(r'\s+-\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4})$', choreo_text, re.I)
+                date_match: re.Match[str] | None = re.search(r'\s+-\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4})$', choreo_text, re.I)
                 if date_match:
                     data['release_date'] = date_match.group(1).strip()
                     # Remove the date from choreo_text
-                    choreo_text = re.sub(r'\s+-\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}$', '', choreo_text, flags=re.I)
-                    choreo_text = re.sub(r'\s+-\s+\d{1,2}/\d{4}$', '', choreo_text)
-                    choreo_text = re.sub(r'\s+-\s+\d{4}$', '', choreo_text)
+                    choreo_text: str = re.sub(r'\s+-\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}$', '', choreo_text, flags=re.I)
+                    choreo_text: str = re.sub(r'\s+-\s+\d{1,2}/\d{4}$', '', choreo_text)
+                    choreo_text: str = re.sub(r'\s+-\s+\d{4}$', '', choreo_text)
                 
                 # Parse multiple choreographers separated by &, 'and', or commas
                 choreo_parts = re.split(r'\s*(?:,\s*(?:and\s+)?|&\s*|(?:\s+and\s+))\s*', choreo_text)
                 choreo_parts = [p.strip() for p in choreo_parts if p.strip()]
                 for part in choreo_parts:
                     # Extract name and location: "John Doe (USA, UK)" or "John Doe"
-                    match = re.match(r'([^(]+)(?:\(([^)]+)\))?', part.strip())
+                    match: re.Match[str] | None = re.match(r'([^(]+)(?:\(([^)]+)\))?', part.strip())
                     if match:
                         name = match.group(1).strip()
                         location = match.group(2).strip() if match.group(2) else ''
@@ -129,25 +133,25 @@ class CopperknobImporter:
             
             # If release date wasn't found in choreographer line, try other patterns
             if not data['release_date']:
-                date_patterns = [
+                date_patterns: list[str] = [
                     r'(?:Date|Released|Choreographed)[:\s]+([^\n\r]+?)(?=\s*\n|\s*$|Choreographer|Level)',
                     r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4})\b',
                     r'\b(\d{1,2}/\d{4})\b',
                 ]
                 for pattern in date_patterns:
-                    date_match = re.search(pattern, page_text, re.I)
+                    date_match: re.Match[str] | None = re.search(pattern, page_text, re.I)
                     if date_match:
                         data['release_date'] = date_match.group(1).strip()
                         break
             
             # Extract level/difficulty - try multiple approaches
             # 1. Look for "Level:" or "Difficulty:" label
-            level_match = re.search(r'(?:Level|Difficulty)[:\s]+([^\n\r]+?)(?=\s*\n|\s*$|Choreographer|Count|Wall)', page_text, re.I)
+            level_match: re.Match[str] | None = re.search(r'(?:Level|Difficulty)[:\s]+([^\n\r]+?)(?=\s*\n|\s*$|Choreographer|Count|Wall)', page_text, re.I)
             if level_match:
                 level_text = level_match.group(1).strip()
                 # Clean up common level formats
-                level_text = re.sub(r'\s*-\s*.*$', '', level_text)  # Remove anything after dash
-                level_text = re.sub(r'\s*\(.*?\)', '', level_text)  # Remove parenthetical
+                level_text: str = re.sub(r'\s*-\s*.*$', '', level_text)  # Remove anything after dash
+                level_text: str = re.sub(r'\s*\(.*?\)', '', level_text)  # Remove parenthetical
                 data['level'] = level_text
             else:
                 # 2. Try finding it in a structured element
@@ -159,22 +163,22 @@ class CopperknobImporter:
                         if next_elem:
                             data['level'] = next_elem.get_text(strip=True)
                         else:
-                            text = parent.get_text()
-                            match = re.search(r'(?:Level|Difficulty)[:\s]+([^\n\r]+)', text, re.I)
+                            text: str = parent.get_text()
+                            match: re.Match[str] | None = re.search(r'(?:Level|Difficulty)[:\s]+([^\n\r]+)', text, re.I)
                             if match:
                                 data['level'] = match.group(1).strip()
             
             # Extract count, walls, tags, restarts
             # Copperknob has labels on one line and values on the next line
-            page_text = soup.get_text()
-            lines = page_text.split('\n')
+            page_text: str = soup.get_text()
+            lines: list[str] = page_text.split('\n')
             
             # Count - look for "Count:" label and get next non-empty line
             for i, line in enumerate(lines):
                 if re.match(r'^\s*Count:\s*$', line, re.I):
                     # Get next non-empty line
                     for j in range(i+1, min(i+5, len(lines))):
-                        val = lines[j].strip()
+                        val: str = lines[j].strip()
                         if val and val.isdigit():
                             data['count'] = int(val)
                             break
@@ -185,7 +189,7 @@ class CopperknobImporter:
                 if re.match(r'^\s*Wall:\s*$', line, re.I):
                     # Get next non-empty line
                     for j in range(i+1, min(i+5, len(lines))):
-                        val = lines[j].strip()
+                        val: str = lines[j].strip()
                         if val and (val.isdigit() or val == '-'):
                             if val.isdigit():
                                 data['walls'] = int(val)
@@ -202,11 +206,11 @@ class CopperknobImporter:
             tag_numbers_seen = set()
             
             for line in lines:
-                line_lower = line.lower()
+                line_lower: str = line.lower()
                 # Look for lines mentioning "tag" (but not "vintage", "footage", etc.)
                 if re.search(r'\btags?\b', line_lower) and not re.search(r'vintage|footage|hashtag', line_lower):
                     # Pattern 1: Numbered tags like "Tag 1:", "Tag 2:", etc.
-                    numbered_tag = re.search(r'\btag\s+(\d+)\b', line, re.I)
+                    numbered_tag: re.Match[str] | None = re.search(r'\btag\s+(\d+)\b', line, re.I)
                     if numbered_tag:
                         tag_numbers_seen.add(int(numbered_tag.group(1)))
                     
@@ -214,16 +218,16 @@ class CopperknobImporter:
                     # Common: "tag after wall 3", "tags after walls 2 and 4"
                     wall_matches = re.findall(r'wall\s+(\d+)', line, re.I)
                     if wall_matches:
-                        tag_count = max(tag_count, len(wall_matches))
+                        tag_count: int = max(tag_count, len(wall_matches))
                     
                     # Pattern 3: Explicit number: "2 tags", "1 tag"
-                    num_match = re.search(r'(\d+)\s+tags?\b', line, re.I)
+                    num_match: re.Match[str] | None = re.search(r'(\d+)\s+tags?\b', line, re.I)
                     if num_match:
-                        tag_count = max(tag_count, int(num_match.group(1)))
+                        tag_count: int = max(tag_count, int(num_match.group(1)))
             
             # If we found numbered tags (Tag 1, Tag 2), use the highest number
             if tag_numbers_seen:
-                tag_count = max(tag_count, max(tag_numbers_seen))
+                tag_count: int = max(tag_count, max(tag_numbers_seen))
             
             if tag_count > 0:
                 data['tags'] = tag_count
@@ -235,16 +239,16 @@ class CopperknobImporter:
             # - "2 restarts", "There are 2 restarts"
             restart_count = 0
             for line in lines:
-                line_lower = line.lower()
+                line_lower: str = line.lower()
                 if 'restart' in line_lower:
                     # Count wall numbers mentioned in restart-related lines
                     wall_matches = re.findall(r'wall\s+(\d+)', line, re.I)
                     if wall_matches:
-                        restart_count = max(restart_count, len(wall_matches))
+                        restart_count: int = max(restart_count, len(wall_matches))
                     # Also check for explicit number: "2 restarts", "1 restart"
-                    num_match = re.search(r'(\d+)\s+restarts?\b', line, re.I)
+                    num_match: re.Match[str] | None = re.search(r'(\d+)\s+restarts?\b', line, re.I)
                     if num_match:
-                        restart_count = max(restart_count, int(num_match.group(1)))
+                        restart_count: int = max(restart_count, int(num_match.group(1)))
             if restart_count > 0:
                 data['restarts'] = restart_count
             
@@ -254,8 +258,8 @@ class CopperknobImporter:
             
             for i, line in enumerate(lines):
                 # Look for "Music:", "Alternative Music:", "or:", "Also:" sections
-                line_stripped = line.strip()
-                is_music_section = (
+                line_stripped: str = line.strip()
+                is_music_section: re.Match[str] | None = (
                     re.match(r'^(Alternative\s+)?Music:\s*$', line_stripped, re.I) or
                     re.match(r'^(or|also):\s*$', line_stripped, re.I)
                 )
@@ -263,7 +267,7 @@ class CopperknobImporter:
                 if is_music_section:
                     # Get next non-empty line
                     for j in range(i+1, min(i+5, len(lines))):
-                        music_text = lines[j].strip()
+                        music_text: str = lines[j].strip()
                         if music_text:
                             song_info = {
                                 'song_name': None,
@@ -274,12 +278,12 @@ class CopperknobImporter:
                             
                             # Parse "Song Name - Artist Name" format
                             if ' - ' in music_text:
-                                parts = music_text.split(' - ', 1)
+                                parts: list[str] = music_text.split(' - ', 1)
                                 if len(parts) == 2:
                                     song_info['song_name'] = parts[0].strip()
-                                    artist_original = parts[1].strip()
+                                    artist_original: str = parts[1].strip()
                                     # Remove duration if present like "(2:41)"
-                                    artist_original = re.sub(r'\s*:\s*\([^)]+\)\s*$', '', artist_original)
+                                    artist_original: str = re.sub(r'\s*:\s*\([^)]+\)\s*$', '', artist_original)
                                     
                                     # Store original format for listbox display
                                     song_info['artist_display'] = artist_original
@@ -289,9 +293,9 @@ class CopperknobImporter:
                                     
                                     # Extract featured artists from song title and add to artist list
                                     # Look for patterns like "feat. Artist" or "(feat. Artist)" or "ft. Artist"
-                                    featured_match = re.search(r'\((?:feat\.|featuring|ft\.)\s+([^)]+)\)', song_info['song_name'], re.I)
+                                    featured_match: re.Match[str] | None = re.search(r'\((?:feat\.|featuring|ft\.)\s+([^)]+)\)', song_info['song_name'], re.I)
                                     if featured_match:
-                                        featured_artist = featured_match.group(1).strip()
+                                        featured_artist: str | tk.Any = featured_match.group(1).strip()
                                         # Add featured artist to the artist field (using comma separator)
                                         song_info['artist'] = f"{song_info['artist']}, {featured_artist}"
                                         song_info['artist_display'] = f"{song_info['artist_display']} & {featured_artist}"
@@ -321,7 +325,7 @@ class CopperknobImporter:
                 for elem in soup.find_all('a', href=True):
                     href = elem.get('href')
                     if '/music/' in href.lower():
-                        link_text = elem.get_text(strip=True)
+                        link_text: str = elem.get_text(strip=True)
                         # Check if link text matches or is part of our song name
                         if link_text and song_info['song_name'] and (
                             link_text.lower() == song_info['song_name'].lower() or
@@ -382,7 +386,7 @@ class CopperknobImporter:
             traceback.print_exc()
             return None
     
-    def extract_song_data(self, url: str) -> Optional[Dict]:
+    def extract_song_data(self, url) -> None:
         """Extract song information from a Copperknob song page.
         
         Args:
@@ -393,7 +397,7 @@ class CopperknobImporter:
         """
         try:
             print(f"DEBUG extract_song_data: Fetching {url}")
-            resp = self.session.get(url, timeout=15)
+            resp: requests.Response = self.session.get(url, timeout=15)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, 'html.parser')
             
@@ -408,12 +412,12 @@ class CopperknobImporter:
             }
             
             # Get text lines for parsing
-            page_text = soup.get_text()
-            lines = page_text.split('\n')
+            page_text: str = soup.get_text()
+            lines: list[str] = page_text.split('\n')
             
             # Extract structured data - Copperknob format: "Field:Value" on same line
             for line in lines:
-                line_stripped = line.strip()
+                line_stripped: str = line.strip()
                 
                 # Genre: "Genre:Pop"
                 if line_stripped.startswith('Genre:'):
@@ -422,8 +426,8 @@ class CopperknobImporter:
                 
                 # BPM: "BPM:97"
                 elif line_stripped.startswith('BPM:'):
-                    bpm_text = line_stripped.replace('BPM:', '').strip()
-                    bpm_match = re.search(r'(\d+)', bpm_text)
+                    bpm_text: str = line_stripped.replace('BPM:', '').strip()
+                    bpm_match: re.Match[str] | None = re.search(r'(\d+)', bpm_text)
                     if bpm_match:
                         data['bpm'] = int(bpm_match.group(1))
                         print(f"DEBUG: Found BPM: {data['bpm']}")
@@ -442,8 +446,8 @@ class CopperknobImporter:
             # Extract album cover image
             # Look for image with alt text containing artist/song or with music service URLs
             for img in soup.find_all('img'):
-                src = img.get('src', '')
-                alt = img.get('alt', '')
+                src: str = img.get('src', '')
+                alt: str = img.get('alt', '')
                 # Album cover is typically from music services (Apple Music, etc.)
                 if src and ('mzstatic.com' in src or 'spotify' in src or 'album' in src.lower()):
                     # Make sure it's not an icon/logo
@@ -462,7 +466,7 @@ class CopperknobImporter:
                 print(f"DEBUG: Found Spotify link: {data['spotify_url']}")
             else:
                 # Try finding in text/script
-                spotify_match = re.search(r'https?://(?:open\.)?spotify\.com/[^\s\'"<>]+', resp.text)
+                spotify_match: re.Match[str] | None = re.search(r'https?://(?:open\.)?spotify\.com/[^\s\'"<>]+', resp.text)
                 if spotify_match:
                     data['spotify_url'] = spotify_match.group(0)
                     print(f"DEBUG: Found Spotify link in text: {data['spotify_url']}")
@@ -477,7 +481,7 @@ class CopperknobImporter:
 
 
 class CopperknobImportGUI(tk.Tk):
-    def _paste_event(self, entry_widget):
+    def _paste_event(self, entry_widget) -> None:
         """Handle paste event for entry widgets."""
         try:
             entry_widget.event_generate('<<Paste>>')
@@ -485,20 +489,20 @@ class CopperknobImportGUI(tk.Tk):
             pass
     """GUI for importing dances from Copperknob."""
 
-    def _open_db_viewer(self):
+    def _open_db_viewer(self) -> None:
         import subprocess
         import sys
         import os
         # Find the absolute path to dance_db_viewer.py in the same project (assume src/dance_db_viewer.py)
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        viewer_path = os.path.join(project_root, 'src', 'dance_db_viewer.py')
+        project_root: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        viewer_path: str = os.path.join(project_root, 'src', 'dance_db_viewer.py')
         if not os.path.exists(viewer_path):
             from tkinter import messagebox
             messagebox.showerror("Not Found", f"Could not find database viewer at {viewer_path}")
             return
         subprocess.Popen([sys.executable, viewer_path])
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.title("Import from Copperknob")
         self.geometry("1150x750")
@@ -520,14 +524,18 @@ class CopperknobImportGUI(tk.Tk):
         # Hidden AKA field
         self.aka_var = tk.StringVar()
 
+        # Notification label (non-blocking)
+        self.notification_label = ttk.Label(self, text="", foreground="green")
+        self.notification_label.pack(side=tk.BOTTOM, fill=tk.X, padx=8, pady=4)
+
         self._build_ui()
     
-    def _build_ui(self):
+    def _build_ui(self) -> None:
         main = ttk.Frame(self, padding=15)
         main.pack(fill=tk.BOTH, expand=True)
         
         # URL input section
-        url_frame = ttk.LabelFrame(main, text="Step 1: Enter Copperknob URL", padding=10)
+        url_frame: ttk.Labelframe = ttk.LabelFrame(main, text="Step 1: Enter Copperknob URL", padding=10)
         url_frame.pack(fill=tk.X, pady=(0, 10))
         
         ttk.Label(url_frame, text="Paste the URL to a Copperknob step sheet:").pack(anchor=tk.W, pady=(0, 5))
@@ -545,7 +553,7 @@ class CopperknobImportGUI(tk.Tk):
         self.fetch_btn.pack(side=tk.LEFT)
         
         # Extracted data display section
-        data_frame = ttk.LabelFrame(main, text="Step 2: Review Extracted Data", padding=10)
+        data_frame: ttk.Labelframe = ttk.LabelFrame(main, text="Step 2: Review Extracted Data", padding=10)
         data_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 10))
         
 
@@ -669,13 +677,13 @@ class CopperknobImportGUI(tk.Tk):
         button_row = ttk.Frame(data_frame)
         button_row.grid(row=row, column=0, columnspan=2, sticky=tk.W, pady=3)
 
-        self.stepsheet_url = ""
+        self.stepsheet_url: str = ""
         self.copperknob_id = None  # Hidden field to track unique dance ID
         self.stepsheet_button = ttk.Button(button_row, text="Open in Copperknob", command=self._open_stepsheet, width=18)
         self.stepsheet_button.grid(row=0, column=0, padx=(0, 5), sticky=tk.W)
         self.stepsheet_button.config(state='disabled')
 
-        self.pdf_url = ""
+        self.pdf_url: str = ""
         self.pdf_path = None  # Track downloaded PDF path
         self.pdf_button = ttk.Button(button_row, text="Download PDF", command=self._download_pdf, width=12)
         self.pdf_button.grid(row=0, column=1, padx=(0, 20), sticky=tk.W)
@@ -772,7 +780,7 @@ class CopperknobImportGUI(tk.Tk):
         # Spotify URL row - label always in grid with fixed width to prevent shifting
         self.spotify_url_label = ttk.Label(details_frame, text=" ", width=12)  # Space instead of empty to maintain height
         self.spotify_url_label.grid(row=detail_row, column=0, sticky=tk.W, pady=2)
-        self.spotify_url_label_row = detail_row
+        self.spotify_url_label_row: int = detail_row
         
         # Container for spotify buttons and URL entry - fixed position with grid
         spotify_container = ttk.Frame(details_frame)
@@ -814,7 +822,7 @@ class CopperknobImportGUI(tk.Tk):
         ttk.Button(btn_frame, text="Clear Form", command=self._clear_form).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="View Database", command=self._open_db_viewer).pack(side=tk.RIGHT, padx=5)
         ttk.Button(btn_frame, text="Open Main GUI", command=self._open_main_gui).pack(side=tk.RIGHT, padx=5)
-        def _open_db_viewer(self):
+        def _open_db_viewer(self) -> None:
             import subprocess
             import sys
             # Launch the database viewer as a separate process
@@ -823,7 +831,7 @@ class CopperknobImportGUI(tk.Tk):
         # Track editing state
         self.songs_editable = False
     
-    def _setup_combobox_behavior(self, combo, var):
+    def _setup_combobox_behavior(self, combo, var) -> None:
         """Customizes Combobox: empty option only in entry, not menu."""
         # Remove empty string from values if present
         values = list(combo.cget('values'))
@@ -848,13 +856,13 @@ class CopperknobImportGUI(tk.Tk):
             except Exception:
                 return None
 
-        def clear_entry_selection():
+        def clear_entry_selection() -> None:
             entry = entry_widget()
             if entry:
                 entry.selection_clear()
                 entry.icursor('end')
 
-        def on_dropdown_open():
+        def on_dropdown_open() -> None:
             # Store the current value
             combo._stored_value = var.get()
             combo.set("")  # Show entry as empty (acts as empty option)
@@ -863,13 +871,13 @@ class CopperknobImportGUI(tk.Tk):
             entry = entry_widget()
             if entry:
                 # If user clicks entry while menu is open and entry is empty, treat as clear
-                def entry_click(ev):
+                def entry_click(ev) -> None:
                     if combo._dropdown_open and not combo.get():
                         combo._entry_cleared = True
                 entry.bind('<Button-1>', entry_click, add='+')
                 combo._entry_click = entry_click
 
-        def on_dropdown_close(event=None):
+        def on_dropdown_close(event=None) -> None:
             combo._dropdown_open = False
             entry = entry_widget()
             if entry and hasattr(combo, '_entry_click'):
@@ -885,7 +893,7 @@ class CopperknobImportGUI(tk.Tk):
                 var.set(combo.get())
                 combo._stored_value = combo.get()
 
-        def on_select(event):
+        def on_select(event) -> None:
             selected = combo.get()
             var.set(selected)
             combo._stored_value = selected
@@ -894,7 +902,7 @@ class CopperknobImportGUI(tk.Tk):
             combo._entry_cleared = False
             on_dropdown_close()
 
-        def on_focus_out(event):
+        def on_focus_out(event) -> None:
             # If entry was cleared, keep cleared
             if combo._entry_cleared or not combo.get():
                 var.set("")
@@ -907,7 +915,7 @@ class CopperknobImportGUI(tk.Tk):
             self.focus_set()
             on_dropdown_close()
 
-        def on_focus_in(event):
+        def on_focus_in(event) -> None:
             self.focus_set()
 
         combo.configure(postcommand=on_dropdown_open)
@@ -916,14 +924,14 @@ class CopperknobImportGUI(tk.Tk):
         combo.bind('<FocusIn>', on_focus_in)
         combo.bind('<Escape>', on_dropdown_close)
     
-    def _on_song_select(self, event):
+    def _on_song_select(self, event) -> None:
         """Handle song selection from the listbox."""
         selection = self.songs_listbox.curselection()
         if selection:
             index = selection[0]
             self._display_song_at_index(index)
     
-    def _toggle_song_editing(self):
+    def _toggle_song_editing(self) -> None:
         """Toggle song field editing."""
         if self.songs_editable:
             # Save and disable editing
@@ -962,15 +970,15 @@ class CopperknobImportGUI(tk.Tk):
             self.cancel_edit_btn.grid(row=0, column=1)
             self.songs_editable = True
     
-    def _store_original_values(self):
+    def _store_original_values(self) -> None:
         """Store the original values before editing."""
-        self.original_song_name = self.song_name_var.get()
-        self.original_artist = self.artist_var.get()
-        self.original_genre = self.genre_var.get()
-        self.original_bpm = self.bpm_var.get()
-        self.original_spotify_url = self.spotify_url_var.get()
+        self.original_song_name: str = self.song_name_var.get()
+        self.original_artist: str = self.artist_var.get()
+        self.original_genre: str = self.genre_var.get()
+        self.original_bpm: str = self.bpm_var.get()
+        self.original_spotify_url: str = self.spotify_url_var.get()
     
-    def _cancel_song_editing(self):
+    def _cancel_song_editing(self) -> None:
         """Cancel editing and restore original values."""
         # Restore original values
         self.song_name_var.set(self.original_song_name)
@@ -1000,7 +1008,7 @@ class CopperknobImportGUI(tk.Tk):
         self.cancel_edit_btn.grid_remove()
         self.songs_editable = False
     
-    def _save_current_song_edits(self):
+    def _save_current_song_edits(self) -> None:
         """Save the current song field edits back to extracted_data."""
         if not self.extracted_data or 'songs' not in self.extracted_data:
             return
@@ -1017,7 +1025,7 @@ class CopperknobImportGUI(tk.Tk):
             songs[index]['artist'] = self.artist_var.get().strip()
             songs[index]['artist_display'] = self.artist_var.get().strip().replace(', ', ' & ')  # Convert back to & for display
             songs[index]['genre'] = self.genre_var.get().strip()
-            bpm_str = self.bpm_var.get().strip()
+            bpm_str: str = self.bpm_var.get().strip()
             songs[index]['bpm'] = int(bpm_str) if bpm_str.isdigit() else None
             songs[index]['spotify_url'] = self.spotify_url_var.get().strip()
             
@@ -1028,13 +1036,13 @@ class CopperknobImportGUI(tk.Tk):
             self.songs_listbox.insert(index, f"{song_name} - {artist_display}")
             self.songs_listbox.selection_set(index)
     
-    def _on_listbox_key(self, event):
+    def _on_listbox_key(self, event) -> None:
         """Handle keyboard navigation in the listbox."""
         # The listbox handles the selection change, we just need to update the display
         # Use after_idle to ensure the selection has been updated
         self.after_idle(lambda: self._on_song_select(event))
     
-    def _display_song_at_index(self, index):
+    def _display_song_at_index(self, index) -> None:
         """Display the song details for the given index."""
         if not self.extracted_data or 'songs' not in self.extracted_data:
             return
@@ -1057,20 +1065,20 @@ class CopperknobImportGUI(tk.Tk):
             else:
                 self.spotify_button.config(state='disabled')
     
-    def _open_spotify(self):
+    def _open_spotify(self) -> None:
         """Open the Spotify URL in the Spotify app."""
-        url = self.spotify_url_var.get().strip()
+        url: str = self.spotify_url_var.get().strip()
         if url:
             import subprocess
             # Convert web URL to spotify: URI if needed
             if 'open.spotify.com' in url or 'spotify.com' in url:
                 # Extract track/album/playlist ID from URL
                 # URLs look like: https://open.spotify.com/track/ID or https://open.spotify.com/album/ID
-                parts = url.rstrip('/').split('/')
+                parts: list[str] = url.rstrip('/').split('/')
                 if len(parts) >= 2:
-                    resource_type = parts[-2]  # track, album, playlist, etc.
-                    resource_id = parts[-1].split('?')[0]  # Remove query params
-                    spotify_uri = f"spotify:{resource_type}:{resource_id}"
+                    resource_type: str = parts[-2]  # track, album, playlist, etc.
+                    resource_id: str = parts[-1].split('?')[0]  # Remove query params
+                    spotify_uri: str = f"spotify:{resource_type}:{resource_id}"
                     try:
                         subprocess.run(['open', spotify_uri], check=True)
                         return
@@ -1079,13 +1087,13 @@ class CopperknobImportGUI(tk.Tk):
             # Fallback to opening URL directly
             subprocess.run(['open', url])
     
-    def _open_stepsheet(self):
+    def _open_stepsheet(self) -> None:
         """Open the Copperknob step sheet URL in a web browser."""
         if self.stepsheet_url:
             import webbrowser
             webbrowser.open(self.stepsheet_url)
     
-    def _download_pdf(self):
+    def _download_pdf(self) -> None:
         """Download PDF silently using headless browser or open if already downloaded."""
         if not self.pdf_url:
             return
@@ -1094,12 +1102,12 @@ class CopperknobImportGUI(tk.Tk):
         if self.pdf_path and os.path.exists(self.pdf_path):
             import subprocess
             # Use AppleScript to open in Preview and bring to front immediately
-            script = f'tell application "Preview" to open POSIX file "{self.pdf_path}"\ntell application "Preview" to activate'
+            script: str = f'tell application "Preview" to open POSIX file "{self.pdf_path}"\ntell application "Preview" to activate'
             subprocess.run(['osascript', '-e', script], check=False)
             return
         
         import threading
-        def download():
+        def download() -> None:
             try:
                 from selenium import webdriver
                 from selenium.webdriver.firefox.options import Options
@@ -1112,8 +1120,8 @@ class CopperknobImportGUI(tk.Tk):
                 
                 # Use pdfs subfolder in DanceDB directory
                 # Always use top-level DanceDB/pdfs folder
-                project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                download_dir = os.path.join(project_root, 'pdfs')
+                project_root: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                download_dir: str = os.path.join(project_root, 'pdfs')
                 os.makedirs(download_dir, exist_ok=True)
                 
                 options = Options()
@@ -1123,18 +1131,18 @@ class CopperknobImportGUI(tk.Tk):
                 options.set_preference('browser.helperApps.neverAsk.saveToDisk', 'application/pdf')
                 options.set_preference('pdfjs.disabled', True)
                 
-                driver = webdriver.Firefox(options=options)
+                driver: WebDriver = webdriver.Firefox(options=options)
                 driver.set_page_load_timeout(10)
                 
                 try:
                     # Get list of PDFs before download
-                    before_pdfs = set(glob.glob(os.path.join(download_dir, '*.pdf')))
+                    before_pdfs: set[str] = set(glob.glob(os.path.join(download_dir, '*.pdf')))
                     
                     driver.get(self.pdf_url)
-                    wait = WebDriverWait(driver, 10)
+                    wait: WebDriverWait[WebDriver] = WebDriverWait(driver, 10)
                     
                     # Try to find and click PDF download button
-                    selectors = [
+                    selectors: list[str] = [
                         "//a[contains(text(), 'PDF')]",
                         "//button[contains(text(), 'PDF')]",
                         "//input[@value='PDF']"
@@ -1142,7 +1150,7 @@ class CopperknobImportGUI(tk.Tk):
                     
                     for selector in selectors:
                         try:
-                            elem = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
+                            elem: WebElement = wait.until(EC.element_to_be_clickable((By.XPATH, selector)))
                             elem.click()
                             time.sleep(3)  # Wait for download
                             break
@@ -1150,35 +1158,35 @@ class CopperknobImportGUI(tk.Tk):
                             continue
                     
                     # Find the new PDF file
-                    after_pdfs = set(glob.glob(os.path.join(download_dir, '*.pdf')))
-                    new_pdfs = after_pdfs - before_pdfs
+                    after_pdfs: set[str] = set(glob.glob(os.path.join(download_dir, '*.pdf')))
+                    new_pdfs: set[str] = after_pdfs - before_pdfs
                     
                     if new_pdfs:
-                        latest_pdf = max(new_pdfs, key=os.path.getctime)
+                        latest_pdf: str = max(new_pdfs, key=os.path.getctime)
                         
                         # Rename PDF to include stepsheet ID for easy future lookup
                         import re
-                        match = re.search(r'/stepsheets/(\d+)/', self.pdf_url)
+                        match: re.Match[str] | None = re.search(r'/stepsheets/(\d+)/', self.pdf_url)
                         if match:
-                            stepsheet_id = match.group(1)
-                            dance_name = self.dance_name_var.get().strip()
+                            stepsheet_id: str | tk.Any = match.group(1)
+                            dance_name: str = self.dance_name_var.get().strip()
                             # Create a clean filename
                             if dance_name:
                                 # Remove special characters from dance name
-                                clean_name = re.sub(r'[^\w\s-]', '', dance_name)
-                                clean_name = re.sub(r'[-\s]+', '_', clean_name)
-                                new_filename = f"{stepsheet_id}_{clean_name}.pdf"
+                                clean_name: str = re.sub(r'[^\w\s-]', '', dance_name)
+                                clean_name: str = re.sub(r'[-\s]+', '_', clean_name)
+                                new_filename: str = f"{stepsheet_id}_{clean_name}.pdf"
                             else:
-                                new_filename = f"{stepsheet_id}.pdf"
+                                new_filename: str = f"{stepsheet_id}.pdf"
                             
-                            new_path = os.path.join(download_dir, new_filename)
+                            new_path: str = os.path.join(download_dir, new_filename)
                             
                             # Rename if not already named correctly
                             if latest_pdf != new_path:
                                 try:
                                     import shutil
                                     shutil.move(latest_pdf, new_path)
-                                    latest_pdf = new_path
+                                    latest_pdf: str = new_path
                                 except:
                                     pass  # Keep original name if rename fails
                         
@@ -1186,7 +1194,7 @@ class CopperknobImportGUI(tk.Tk):
                         # Change button text to "Open PDF"
                         self.pdf_button.config(text='Open PDF')
                         # Use AppleScript to open in Preview and bring to front immediately
-                        script = f'tell application "Preview" to open POSIX file "{latest_pdf}"\ntell application "Preview" to activate'
+                        script: str = f'tell application "Preview" to open POSIX file "{latest_pdf}"\ntell application "Preview" to activate'
                         subprocess.run(['osascript', '-e', script], check=False)
                     
                 finally:
@@ -1199,11 +1207,11 @@ class CopperknobImportGUI(tk.Tk):
     
 
     
-    def _log(self, message: str):
+    def _log(self, message: str) -> None:
         """Log message - status box removed, this is now a no-op."""
         pass
     
-    def _fetch_data(self):
+    def _fetch_data(self) -> None:
         global re
         # DEBUG: Check if 're' is available
         try:
@@ -1212,7 +1220,7 @@ class CopperknobImportGUI(tk.Tk):
             print(f"DEBUG: re is not available: {e}")
             raise ImportError("re module is not available in _fetch_data")
         """Fetch and parse data from the provided URL."""
-        url = self.url_var.get().strip()
+        url: str = self.url_var.get().strip()
         if not url:
             messagebox.showwarning("No URL", "Please enter a Copperknob URL.")
             return
@@ -1245,13 +1253,13 @@ class CopperknobImportGUI(tk.Tk):
             self.dance_name_entry = ttk.Entry(self.dance_name_input_frame, textvariable=new_dance_name_var, width=43)
             self.dance_name_entry.grid(row=0, column=0, sticky="nsew")
             print("DEBUG: Using entry for dance name")
-            self.dance_name_var = new_dance_name_var
+            self.dance_name_var: tk.StringVar = new_dance_name_var
             self.aka_var.set(data.get('aka', ''))
             
             # Format choreographers as "Name (Location), Name2 (Location2)"
             choreo_list = data.get('choreographers', [])
             if choreo_list:
-                choreo_str = ', '.join([
+                choreo_str: str = ', '.join([
                     f"{c['name']} ({c['location']})" if c['location'] else c['name']
                     for c in choreo_list
                 ])
@@ -1277,7 +1285,7 @@ class CopperknobImportGUI(tk.Tk):
                 # Populate the listbox with "Song Name - Artist" using artist_display for original format
                 for song in songs:
                     artist_display = song.get('artist_display', song.get('artist', 'Unknown'))
-                    song_display = f"{song.get('song_name', 'Unknown')} - {artist_display}"
+                    song_display: str = f"{song.get('song_name', 'Unknown')} - {artist_display}"
                     self.songs_listbox.insert(tk.END, song_display)
                 
                 # Select the first song by default
@@ -1302,19 +1310,19 @@ class CopperknobImportGUI(tk.Tk):
                 
                 # Extract and store copperknob_id from URL
                 import re
-                match = re.search(r'/stepsheets/(\d+)/', data['url'])
+                match: re.Match[str] | None = re.search(r'/stepsheets/(\d+)/', data['url'])
                 if match:
-                    self.copperknob_id = match.group(1)
+                    self.copperknob_id: str | tk.Any = match.group(1)
                 
                 # Check if we already have a PDF for this URL using the copperknob_id
                 if self.copperknob_id:
                     # Look for PDF with this ID in pdfs folder
                     # Always use top-level DanceDB/pdfs folder
-                    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                    download_dir = os.path.join(project_root, 'pdfs')
+                    project_root: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    download_dir: str = os.path.join(project_root, 'pdfs')
                     import glob
                     # Common Copperknob PDF naming patterns
-                    possible_patterns = [
+                    possible_patterns: list[str] = [
                         os.path.join(download_dir, f'*{self.copperknob_id}*.pdf'),
                         os.path.join(download_dir, f'{self.copperknob_id}.pdf'),
                     ]
@@ -1324,11 +1332,11 @@ class CopperknobImportGUI(tk.Tk):
                         matches = glob.glob(pattern)
                         if matches:
                             # Get the most recent if multiple matches
-                            found_pdf = max(matches, key=os.path.getctime)
+                            found_pdf: str = max(matches, key=os.path.getctime)
                             break
                     
                     if found_pdf and os.path.exists(found_pdf):
-                        self.pdf_path = found_pdf
+                        self.pdf_path: str = found_pdf
                         self.pdf_button.config(state='normal', text='Open PDF')
                     else:
                         self.pdf_path = None
@@ -1337,9 +1345,9 @@ class CopperknobImportGUI(tk.Tk):
                     self.pdf_path = None
                     self.pdf_button.config(state='normal', text='Download PDF')
             else:
-                self.stepsheet_url = ""
+                self.stepsheet_url: str = ""
                 self.stepsheet_button.config(state='disabled')
-                self.pdf_url = ""
+                self.pdf_url: str = ""
                 self.pdf_path = None
                 self.pdf_button.config(state='disabled', text='Download PDF')
             
@@ -1368,23 +1376,23 @@ class CopperknobImportGUI(tk.Tk):
         finally:
             self.fetch_btn.config(state='normal')
     
-    def _save_to_db(self):
+    def _save_to_db(self) -> None:
         """Save the extracted/edited data to the database."""
-        dance_name = self.dance_name_var.get().strip()
+        dance_name: str = self.dance_name_var.get().strip()
         if not dance_name:
             messagebox.showwarning("Missing Data", "Dance name is required.")
             return
         
         # Parse choreographers from the text field
         # Expected format: "Name (Location) & Name2 (Location2)" or just "Name & Name2"
-        choreo_text = self.choreographer_var.get().strip()
+        choreo_text: str = self.choreographer_var.get().strip()
         choreographers = []
         if choreo_text:
             # Split by & or 'and' or comma
             choreo_parts = re.split(r'\s*(?:,\s*(?:and\s+)?|&\s*|(?:\s+and\s+))\s*', choreo_text)
             choreo_parts = [p.strip() for p in choreo_parts if p.strip()]
             for part in choreo_parts:
-                match = re.match(r'([^(]+)(?:\(([^)]+)\))?', part.strip())
+                match: re.Match[str] | None = re.match(r'([^(]+)(?:\(([^)]+)\))?', part.strip())
                 if match:
                     name = match.group(1).strip()
                     location = match.group(2).strip() if match.group(2) else ''
@@ -1407,7 +1415,7 @@ class CopperknobImportGUI(tk.Tk):
         try:
             notes_val = self.notes_text.get('1.0', 'end-1c')
         except AttributeError:
-            notes_val = ''
+            notes_val: str = ''
         record = {
             'name': dance_name,
             'aka': self.aka_var.get().strip(),
@@ -1431,22 +1439,22 @@ class CopperknobImportGUI(tk.Tk):
             print(f"DEBUG: Using extracted songs list: {len(songs)} song(s)")
         else:
             # Fallback: build from single song GUI fields
-            song_name = self.song_name_var.get().strip()
+            song_name: str = self.song_name_var.get().strip()
             if song_name:
                 song = {
                     'name': song_name,
                     'artist': self.artist_var.get().strip()
                 }
-                genre = self.genre_var.get().strip()
+                genre: str = self.genre_var.get().strip()
                 if genre:
                     song['genre'] = genre
-                bpm_str = self.bpm_var.get().strip()
+                bpm_str: str = self.bpm_var.get().strip()
                 if bpm_str:
                     try:
                         song['bpm'] = float(bpm_str)
                     except ValueError:
                         pass
-                spotify_url = self.spotify_url_var.get().strip()
+                spotify_url: str = self.spotify_url_var.get().strip()
                 if spotify_url:
                     song['spotify_url'] = spotify_url
                 songs.append(song)
@@ -1457,13 +1465,15 @@ class CopperknobImportGUI(tk.Tk):
         try:
             self.db.add_record(record)
             self._log(f"✓ Saved '{dance_name}' to database!")
-            messagebox.showinfo("Saved", f"Dance '{dance_name}' has been saved to the database.")
+            self.notification_label.config(text=f"Dance '{dance_name}' has been saved to the database.", foreground="green")
+            self.after(2500, lambda: self.notification_label.config(text=""))
             self._clear_form()
         except Exception as e:
             self._log(f"❌ Error saving: {e}")
-            messagebox.showerror("Save Error", f"Failed to save: {e}")
+            self.notification_label.config(text=f"Failed to save: {e}", foreground="red")
+            self.after(2500, lambda: self.notification_label.config(text="", foreground="green"))
     
-    def _clear_form(self):
+    def _clear_form(self) -> None:
         # Revert dance name input to Entry (text box)
         for widget in self.dance_name_input_frame.winfo_children():
             widget.destroy()
@@ -1494,22 +1504,22 @@ class CopperknobImportGUI(tk.Tk):
         self.bpm_var.set('')
         self.spotify_url_var.set('')
         self.spotify_button.config(state='disabled')
-        self.stepsheet_url = ""
+        self.stepsheet_url: str = ""
         self.copperknob_id = None
         self.stepsheet_button.config(state='disabled')
-        self.pdf_url = ""
+        self.pdf_url: str = ""
         self.pdf_path = None
         self.pdf_button.config(state='disabled', text='Download PDF')
         self.extracted_data = None
     
-    def _open_main_gui(self):
+    def _open_main_gui(self) -> None:
         """Open the main dance management GUI."""
         import subprocess
         import sys
         import os
         # Find the absolute path to dance_gui.py in the same project (assume src/dance_gui.py)
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        gui_path = os.path.join(project_root, 'src', 'dance_gui.py')
+        project_root: str = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        gui_path: str = os.path.join(project_root, 'src', 'dance_gui.py')
         if not os.path.exists(gui_path):
             from tkinter import messagebox
             messagebox.showerror("Not Found", f"Could not find main GUI at {gui_path}")
@@ -1517,7 +1527,7 @@ class CopperknobImportGUI(tk.Tk):
         subprocess.Popen([sys.executable, gui_path])
 
 
-def main():
+def main() -> None:
     app = CopperknobImportGUI()
     app.mainloop()
 
