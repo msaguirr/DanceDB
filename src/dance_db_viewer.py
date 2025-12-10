@@ -69,11 +69,11 @@ class DanceDBViewer(tk.Tk):
 
         left_frame = ttk.Frame(main_frame)
         left_frame.grid(row=1, column=0, sticky="nsew", padx=0, pady=0)
-        left_frame.grid_propagate(True)
+        left_frame.grid(row=1, column=0, sticky="nsew", padx=(0,8), pady=0)
 
         right_frame = ttk.Frame(main_frame)
         right_frame.grid(row=1, column=1, sticky="nsew", padx=0, pady=0)
-        right_frame.grid_propagate(True)
+        right_frame.grid(row=1, column=1, sticky="nsew", padx=(0,0), pady=0)
 
         self.tree = ttk.Treeview(left_frame, columns=("name", "level", "priority", "category", "songs"), show="headings")
         import tkinter.font as tkfont
@@ -165,11 +165,9 @@ class DanceDBViewer(tk.Tk):
         confirm_win.geometry(f"+{x}+{y}")
         confirm_win.wait_window()
         return
-
     def _actually_delete_row(self, db_id):
         try:
             conn = sqlite3.connect(DB_PATH)
-            c = conn.cursor()
             c.execute("DELETE FROM dances WHERE id=?", (db_id,))
             conn.commit()
             conn.close()
