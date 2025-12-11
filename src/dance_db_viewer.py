@@ -6,6 +6,68 @@ import os
 
 DB_PATH = os.path.join(os.path.expanduser("~"), "dances.db")
 
+class SheetView(ttk.Frame):
+    def __init__(self, parent, headers, on_row_selected, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self.on_row_selected = on_row_selected  # callback: row_idx -> None
+        self.sheet = tksheet.Sheet(self,
+            headers=headers,
+            show_row_index=False,
+            show_header=True,
+            width=800,
+            row_height=60,
+            align="w",
+            enable_edit=False,
+            theme="dark",
+            table_bg="#242424",
+            header_bg="#2F2E2E",
+            table_wrap=""
+        )
+        self.sheet.grid(row=0, column=0, sticky="nsew")
+        self.sheet.config(width=800)
+        self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+        self._row_id_map = []
+        self.sheet.enable_bindings(("single_select", "row_select", "rc_select", "arrowkeys"))
+        self.sheet.extra_bindings([
+            ("row_select", self._on_sheet_row_select),
+            ("cell_select", self._on_sheet_row_select)
+        ])
+
+    def set_data(self, data, row_id_map):
+        self._row_id_map = row_id_map
+        self.sheet.set_sheet_data(data, reset_col_positions=True, reset_row_positions=True)
+        self.sheet.set_all_cell_sizes_to_text()
+
+    def get_selected_row_idx(self):
+        selected = self.sheet.get_selected_rows()
+        if selected:
+            return list(selected)[0]
+        selected_cells = self.sheet.get_selected_cells()
+        if selected_cells:
+            return list(selected_cells)[0][0]
+        return None
+
+    def deselect_all(self):
+        self.sheet.deselect('all')
+        self.sheet.deselect('cells')
+
+    def _on_sheet_row_select(self, event):
+        row_idx = self.get_selected_row_idx()
+        if row_idx is not None:
+            if list(self.sheet.get_selected_rows()) != [row_idx]:
+                self.sheet.deselect('all')
+                self.sheet.select_row(row_idx)
+            self.sheet.deselect('cells')
+            if self.on_row_selected:
+                self.on_row_selected(row_idx)
+        else:
+            self.deselect_all()
+            if self.on_row_selected:
+                self.on_row_selected(None)
+        return "break"
+
+
 class DanceDBViewer(tk.Tk):
     def _on_row_click(self, event):
         # Ensure details panel updates on any row click
@@ -54,17 +116,13 @@ class DanceDBViewer(tk.Tk):
 
         main_frame = ttk.Frame(self)
         main_frame.grid(row=0, column=0, sticky="nsew")
-
-        # Ensure the root window expands
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
-
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=0)
-        main_frame.rowconfigure(0, weight=0)  # search bar row
-        main_frame.rowconfigure(1, weight=1)  # main content row
+        main_frame.rowconfigure(0, weight=0)
+        main_frame.rowconfigure(1, weight=1)
 
-        # Search bar now above both frames
         search_frame = ttk.Frame(main_frame)
         search_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=8, pady=6)
         ttk.Label(search_frame, text="Search:").pack(side=tk.LEFT)
@@ -74,54 +132,27 @@ class DanceDBViewer(tk.Tk):
         search_entry.bind('<Return>', lambda e: self._load_data())
         ttk.Button(search_frame, text="Delete Selected", command=self._delete_selected_row).pack(side=tk.LEFT, padx=8)
 
-
         left_frame = ttk.Frame(main_frame, width=800)
         left_frame.grid(row=1, column=0, sticky="nsew", padx=(0,8), pady=0)
         left_frame.grid_propagate(False)
         main_frame.grid_columnconfigure(0, weight=1)
         main_frame.grid_rowconfigure(1, weight=1)
-        # Allow left_frame to expand to fit content
-        # left_frame.grid_propagate(False)  # Removed to allow expansion
 
         right_frame = ttk.Frame(main_frame, width=340)
         right_frame.grid(row=1, column=1, sticky="ns", padx=(0,0), pady=0)
         right_frame.grid_propagate(False)
 
-
-        # --- tksheet setup ---
-        self.sheet = tksheet.Sheet(left_frame,
+        # --- SheetView setup ---
+        self.sheet_view = SheetView(left_frame,
             headers=["Name", "Songs", "Level", "Priority", "Category"],
-            show_row_index=False,
-            show_header=True,
-            width=800,
-            row_height=60,
-            align="w",
-            enable_edit=False,
-            theme="dark",
-            table_bg="#242424",
-            header_bg= "#2F2E2E",
-            table_wrap=""
+            on_row_selected=self._on_sheet_row_selected
         )
-        self.sheet.grid(row=0, column=0, sticky="nsew")
-        self.sheet.config(width=800)
+        self.sheet_view.grid(row=0, column=0, sticky="nsew")
         left_frame.rowconfigure(0, weight=1)
         left_frame.columnconfigure(0, weight=1)
         right_frame.rowconfigure(0, weight=1)
         right_frame.columnconfigure(0, weight=1)
-        # Ensure main_frame expands both columns
-        main_frame.columnconfigure(0, weight=1)
-        main_frame.columnconfigure(1, weight=0)
-        main_frame.rowconfigure(1, weight=1)
 
-        # Schedule column width setting after rendering
-        # No delayed column width calls
-
-        # Bind selection event for tksheet
-        # Only enable essential bindings, no column resizing
-        self.sheet.enable_bindings(("single_select", "row_select", "rc_select", "arrowkeys"))
-        self.sheet.extra_bindings([("row_select", self._on_sheet_row_select)])
-
-        # Details label (Text widget for multi-line info)
         self.details_label = tk.Text(
             right_frame,
             wrap=tk.WORD,
@@ -138,7 +169,6 @@ class DanceDBViewer(tk.Tk):
         self.details_label.delete('1.0', tk.END)
         self.details_label.config(state='disabled')
 
-        # Notification label (non-blocking)
         self.notification_label = ttk.Label(self, text="", foreground="green", font=tree_font)
         self.notification_label.grid(row=1, column=0, sticky="ew", padx=8, pady=4)
         
@@ -178,7 +208,7 @@ class DanceDBViewer(tk.Tk):
     def _load_data(self):
         search_filter = self.search_var.get().strip().lower()
         data = []
-        self._row_id_map = []  # Map tksheet row index to db_id
+        row_id_map = []
         try:
             conn = sqlite3.connect(DB_PATH)
             c = conn.cursor()
@@ -187,7 +217,6 @@ class DanceDBViewer(tk.Tk):
                 (db_id, name, level, choreographers, release_date, priority, category, frequency, aka, notes, copperknob_id, songs_json) = row
                 match = True
                 if search_filter:
-                    # Match against dance name, song name, or song artist
                     if search_filter not in name.lower():
                         found = False
                         try:
@@ -202,7 +231,6 @@ class DanceDBViewer(tk.Tk):
                         if not found:
                             match = False
                 if match:
-                    # Parse songs for display (multi-line)
                     try:
                         import json
                         songs = json.loads(songs_json)
@@ -211,27 +239,24 @@ class DanceDBViewer(tk.Tk):
                     except Exception:
                         song_display = ""
                     data.append([name, song_display, level, priority, category])
-                    self._row_id_map.append(db_id)
+                    row_id_map.append(db_id)
             conn.close()
-            self.sheet.set_sheet_data(data, reset_col_positions=True, reset_row_positions=True)
-            self.sheet.set_all_cell_sizes_to_text()
-
+            self.sheet_view.set_data(data, row_id_map)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load data: {e}")
 
-    def _on_sheet_row_select(self, event):
-        # Called when a row is selected in tksheet
-        selected = self.sheet.get_selected_rows()
-        if not selected:
+    def _on_sheet_row_selected(self, row_idx):
+        # Called by SheetView when a row is selected (row_idx or None)
+        if row_idx is None:
             self.details_label.config(state='normal')
             self.details_label.delete('1.0', tk.END)
             self.details_label.config(state='disabled')
             self.geometry("900x550")
             return
-        row_idx = selected[0]
-        if row_idx >= len(self._row_id_map):
+        # Get row_id_map from SheetView
+        if not hasattr(self.sheet_view, '_row_id_map') or row_idx >= len(self.sheet_view._row_id_map):
             return
-        db_id = self._row_id_map[row_idx]
+        db_id = self.sheet_view._row_id_map[row_idx]
         self.details_label.config(state='normal')
         self.details_label.delete('1.0', tk.END)
         try:
