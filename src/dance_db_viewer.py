@@ -216,18 +216,6 @@ class DanceDBViewer(tk.Tk):
             self.sheet.set_sheet_data(data, reset_col_positions=True, reset_row_positions=True)
             self.sheet.set_all_cell_sizes_to_text()
 
-            def autosize():
-                try:
-                    #self.sheet.set_all_column_widths_to_text()
-                    self.sheet.set_all_display_column_widths_to_text()
-                except Exception:
-                    pass
-                #try:
-                #    self.sheet.set_all_row_heights_to_text()
-                #except Exception:
-                    pass
-                #self.sheet.redraw()
-            #self.after(100, autosize)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to load data: {e}")
 

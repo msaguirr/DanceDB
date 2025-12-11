@@ -284,13 +284,26 @@ class CopperknobImporter:
                                     artist_original: str = parts[1].strip()
                                     # Remove duration if present like "(2:41)"
                                     artist_original: str = re.sub(r'\s*:\s*\([^)]+\)\s*$', '', artist_original)
-                                    
                                     # Store original format for listbox display
                                     song_info['artist_display'] = artist_original
-                                    
-                                    # Convert & to comma separator for artist field only
-                                    song_info['artist'] = artist_original.replace(' & ', ', ')
-                                    
+                                    # Hardcode: If artist is 'Big & Rich' or 'Brooks & Dunn', do not split
+                                    # Accept both '&' and 'and' spellings for known groups
+                                    artist_hardcodes = {
+                                        'big & rich', 'big and rich',
+                                        'brooks & dunn', 'brooks and dunn',
+                                        'banx & ranx', 'banx and ranx',
+                                        'c&c music factory', 'c & c music factory', 'c and c music factory',
+                                        'maddie & tae', 'maddie and tae',
+                                        'love & theft', 'love and theft',
+                                        'twang & round', 'twang and round',
+                                        'nathaniel rateliff & the night sweats', 'nathaniel rateliff and the night sweats',
+                                        'big head todd & the monsters', 'big head todd and the monsters'
+                                    }
+                                    if artist_original.strip().lower() in artist_hardcodes:
+                                        song_info['artist'] = artist_original.strip()
+                                    else:
+                                        # Convert & to comma separator for artist field only
+                                        song_info['artist'] = artist_original.replace(' & ', ', ')
                                     # Extract featured artists from song title and add to artist list
                                     # Look for patterns like "feat. Artist" or "(feat. Artist)" or "ft. Artist"
                                     featured_match: re.Match[str] | None = re.search(r'\((?:feat\.|featuring|ft\.)\s+([^)]+)\)', song_info['song_name'], re.I)
@@ -299,7 +312,6 @@ class CopperknobImporter:
                                         # Add featured artist to the artist field (using comma separator)
                                         song_info['artist'] = f"{song_info['artist']}, {featured_artist}"
                                         song_info['artist_display'] = f"{song_info['artist_display']} & {featured_artist}"
-                                    
                                     print(f"DEBUG: Extracted song - Song: {song_info['song_name']}, Artist: {song_info['artist']}")
                             elif ' by ' in music_text.lower():
                                 # Fallback: "Song by Artist" format
