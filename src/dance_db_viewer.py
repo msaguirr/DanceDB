@@ -8,6 +8,7 @@ DB_PATH = os.path.join(os.path.expanduser("~"), "dances.db")
 
 class SheetView(ttk.Frame):
     def __init__(self, parent, headers, on_row_selected, *args, **kwargs):
+        self._sort_state = {}  # column index -> ascending bool
         super().__init__(parent, *args, **kwargs)
         self.on_row_selected = on_row_selected  # callback: row_idx -> None
         self.sheet = tksheet.Sheet(self,
@@ -28,14 +29,135 @@ class SheetView(ttk.Frame):
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
         self._row_id_map = []
-        self.sheet.enable_bindings(("single_select", "row_select", "rc_select", "arrowkeys"))
+        #self.sheet.select_row(1, redraw=True)
+        self.sheet.enable_bindings("all")
+        #self.sheet.extra_bindings([("cell_select", self.on_cell_select)])
+        
+        #self.sheet.single_selection_enabled = False
+        #self.sheet.set_options(show_selected_cells_border=False)
+
         self.sheet.extra_bindings([
             ("row_select", self._on_sheet_row_select),
-            ("cell_select", self._on_sheet_row_select)
+            ("cell_select", self._on_cell_select),
+            ("header_select", self._on_header_select_debug),
+            ("column_select", self._on_column_select_debug)
         ])
 
+    def _on_header_select_debug(self, event):
+        print("[DEBUG] header_select event:", event)
+        return None
+
+    def _on_column_select_debug(self, event):
+        print("[DEBUG] column_select event:", event)
+        sel = event.get('selected', None)
+        col = None
+        if sel is not None and hasattr(sel, 'column'):
+            col = sel.column
+        # Fallback: try to get from selection_boxes
+        if col is None and 'selection_boxes' in event:
+            boxes = event['selection_boxes']
+            for box, typ in boxes.items():
+                if typ == 'columns' and hasattr(box, 'from_c'):
+                    col = box.from_c
+                    break
+        if col is not None:
+            # Toggle sort direction for this column
+            ascending = self._sort_state.get(col, True)
+            self._sort_state[col] = not ascending
+            print(f"[DEBUG] Manual sorting column {col} | ascending={ascending}")
+            # Print all rows before sort
+            print("[DEBUG] All rows before sort:")
+            for i, row in enumerate(self._current_data):
+                print(f"  Row {i}: {row}")
+            # Sort self._current_data and self._row_id_map together
+            combined = list(zip(self._current_data, self._row_id_map))
+            combined.sort(key=lambda x: (x[0][col] or '').lower(), reverse=not ascending)
+            if combined:
+                self._current_data, self._row_id_map = zip(*combined)
+                self._current_data = list(self._current_data)
+                self._row_id_map = list(self._row_id_map)
+            else:
+                self._current_data, self._row_id_map = [], []
+            self.sheet.set_sheet_data(self._current_data, reset_col_positions=True, reset_row_positions=True)
+            self.sheet.set_all_cell_sizes_to_text()
+            self.sheet.redraw()
+            # Print all rows after sort
+            print("[DEBUG] All rows after manual sort:")
+            for i, row in enumerate(self._current_data):
+                print(f"  Row {i}: {row}")
+        return None
+        # Debug: print all attributes of the Sheet object to find header widget
+        print("[DEBUG] tksheet.Sheet attributes:", dir(self.sheet))
+
+    def _on_header_left_click_sort(self, event):
+        # Determine which column was clicked
+        x = event.x
+        col = self.sheet.get_col_at_pos(x)
+        print(f"[DEBUG] Header left-clicked: column {col}")
+        if col is not None:
+            self.sheet.sort_column(col)
+
+    def _on_column_header_click_debug(self, event):
+        print("[DEBUG] column_header_click event:", event)
+        col = event.get('column', None)
+        print(f"[DEBUG] Clicked column index: {col}")
+        # Let tksheet handle the sort as normal
+        return None
+        self.sheet.bind("<<SheetModified>>", self._on_sheet_modified)
+
+    def _on_sheet_modified(self, event):
+        # Called after a sort or other modification
+        # Print event for debug
+        print("[DEBUG] <<SheetModified>> event:", event)
+        # If the event is a sort, update row_id_map to match new order
+        # (tksheet does not update your external row_id_map automatically)
+        # You may need to update self._row_id_map here if you rely on it
+        # For now, just print a message
+        # You can add logic here to sync row_id_map if needed
+        pass
+
+    # (debug event wrapper removed)
+
+    # Removed custom _on_column_select; tksheet built-in sort will be used
+
+
+    # (removed duplicate/unused on_cell_select)
+        
+    # Bind the function to the CellSelect event
+    #self.sheet.extra_bindings([("cell_select", on_cell_select)])
+
+    def _on_cell_select(self, event):
+        print("[DEBUG] cell_select event:", event)
+        row_idx = self.get_selected_row_idx()
+        if event.get('type') == 'header':
+            print("[DEBUG] cell_select: header clicked")
+            self.sheet.deselect('all')
+            self.sheet.deselect('cells')
+            self.sheet.deselect('rows')
+            if self.on_row_selected:
+                self.on_row_selected(None)
+            return "break"
+        if row_idx is not None:
+            if list(self.sheet.get_selected_rows()) != [row_idx]:
+                self.sheet.deselect('all')
+                self.sheet.select_row(row_idx)
+            self.sheet.deselect('cells')
+            if self.on_row_selected:
+                self.on_row_selected(row_idx)
+        else:
+            self.deselect_all()
+            if self.on_row_selected:
+                self.on_row_selected(None)
+        return "break"
+
     def set_data(self, data, row_id_map):
-        self._row_id_map = row_id_map
+        # Debug: print data types for each column in the first few rows
+        if data:
+            print("[DEBUG] set_data: first 3 rows and their types:")
+            for i, row in enumerate(data[:3]):
+                print(f"  Row {i}: {[type(cell) for cell in row]} | {row}")
+        self._current_data = list(data)
+        self._row_id_map = list(row_id_map)
         self.sheet.set_sheet_data(data, reset_col_positions=True, reset_row_positions=True)
         self.sheet.set_all_cell_sizes_to_text()
 
@@ -53,7 +175,16 @@ class SheetView(ttk.Frame):
         self.sheet.deselect('cells')
 
     def _on_sheet_row_select(self, event):
+        print("[DEBUG] row_select event:", event)
         row_idx = self.get_selected_row_idx()
+        if event.get('type') == 'header':
+            print("[DEBUG] row_select: header clicked")
+            self.sheet.deselect('all')
+            self.sheet.deselect('cells')
+            self.sheet.deselect('rows')
+            if self.on_row_selected:
+                self.on_row_selected(None)
+            return "break"
         if row_idx is not None:
             if list(self.sheet.get_selected_rows()) != [row_idx]:
                 self.sheet.deselect('all')
@@ -301,5 +432,7 @@ class DanceDBViewer(tk.Tk):
     # Double-click handler for Treeview is obsolete and removed.
 
 if __name__ == "__main__":
+    import tksheet
+    print("[DEBUG] tksheet version:", tksheet.__version__)
     app = DanceDBViewer()
     app.mainloop()
