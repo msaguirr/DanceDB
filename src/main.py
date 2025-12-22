@@ -61,7 +61,7 @@ class MainWindow(QMainWindow):
 			from scrapers.dance_scraper import scrape_dance_info
 			scraped = scrape_dance_info(url)
 			if scraped:
-				dialog.name_input.setText(scraped.get('name', ''))
+				dialog.name_input.setText(scraped.get('dance_name', ''))
 				dialog.choreo_input.setText(scraped.get('choreographer', ''))
 				dialog.level_input.setText(scraped.get('level', ''))
 				dialog.count_input.setText(scraped.get('count', ''))
@@ -126,7 +126,7 @@ class MainWindow(QMainWindow):
 		def fetch_callback(url, dialog):
 			data = scrape_dance_info(url)
 			if data:
-				dialog.name_input.setText(data.get('name', ''))
+				dialog.name_input.setText(data.get('dance_name', ''))
 				dialog.choreo_input.setText(data.get('choreographer', ''))
 				dialog.level_input.setText(data.get('level', ''))
 				dialog.count_input.setText(data.get('count', ''))
