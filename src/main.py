@@ -1,6 +1,6 @@
 import sys
 import signal
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTableWidget, QTableWidgetItem, QPushButton, QVBoxLayout, QWidget, QHBoxLayout, QMessageBox, QDialog
 from ui.add_dance_dialog import AddDanceDialog
 from scrapers.dance_scraper import scrape_dance_info
 from db.models import initialize_db, get_connection

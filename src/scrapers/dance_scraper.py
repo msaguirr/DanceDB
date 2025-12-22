@@ -48,7 +48,7 @@ def scrape_dance_info(url):
 			desc = meta_desc['content']
 			# Try to extract e.g. "22 Count 4 Wall Beginner"
 			import re
-			m = re.match(r"(\d+) Count (\d+) Wall ([^\-]+)", desc)
+			m = re.match(r"(\d+) Count (\d+) Wall ([^-]+)", desc)
 			if m:
 				count = m.group(1)
 				wall = m.group(2)
@@ -56,6 +56,9 @@ def scrape_dance_info(url):
 			else:
 				# fallback: just use the whole string before the dash
 				level = desc.split('-')[0].strip()
+			# Always strip 'Line Dance' from level if present
+			if level.endswith('Line Dance'):
+				level = level[:-len('Line Dance')].strip()
 
 		# Notes: use meta description for now
 		notes = meta_desc['content'] if meta_desc and meta_desc.get('content') else ''
