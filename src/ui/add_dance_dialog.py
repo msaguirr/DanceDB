@@ -36,10 +36,21 @@ class AddDanceDialog(QDialog):
         self.count_input = QLineEdit()
         layout.addWidget(self.count_input)
 
+
         # Wall
         layout.addWidget(QLabel("Wall:"))
         self.wall_input = QLineEdit()
         layout.addWidget(self.wall_input)
+
+        # Tag
+        layout.addWidget(QLabel("Tag:"))
+        self.tag_input = QLineEdit()
+        layout.addWidget(self.tag_input)
+
+        # Restart
+        layout.addWidget(QLabel("Restart:"))
+        self.restart_input = QLineEdit()
+        layout.addWidget(self.restart_input)
 
         # Known Status
         layout.addWidget(QLabel("Known Status:"))

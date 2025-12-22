@@ -51,7 +51,7 @@ class MainWindow(QMainWindow):
 			return
 		conn = get_connection()
 		c = conn.cursor()
-		c.execute("SELECT name, choreographer, level, count, wall, stepsheet_url, known_status, category, priority, action, notes FROM dances WHERE id=?", (row_id,))
+		c.execute("SELECT name, choreographer, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes FROM dances WHERE id=?", (row_id,))
 		data = c.fetchone()
 		conn.close()
 		if not data:
@@ -74,24 +74,28 @@ class MainWindow(QMainWindow):
 		dialog.level_input.setText(data[2])
 		dialog.count_input.setText(data[3])
 		dialog.wall_input.setText(data[4])
-		dialog.url_input.setText(data[5])
-		dialog.known_combo.setCurrentText(data[6] or "")
-		dialog.category_combo.setCurrentText(data[7] or "")
-		dialog.priority_combo.setCurrentText(data[8] or "")
-		dialog.action_combo.setCurrentText(data[9] or "")
-		dialog.notes_input.setPlainText(data[10] or "")
+		dialog.tag_input.setText(data[5] or "")
+		dialog.restart_input.setText(data[6] or "")
+		dialog.url_input.setText(data[7])
+		dialog.known_combo.setCurrentText(data[8] or "")
+		dialog.category_combo.setCurrentText(data[9] or "")
+		dialog.priority_combo.setCurrentText(data[10] or "")
+		dialog.action_combo.setCurrentText(data[11] or "")
+		dialog.notes_input.setPlainText(data[12] or "")
 		if dialog.exec_():
 			# Save changes
 			conn = get_connection()
 			c = conn.cursor()
 			c.execute('''
-				UPDATE dances SET name=?, choreographer=?, level=?, count=?, wall=?, stepsheet_url=?, known_status=?, category=?, priority=?, action=?, notes=? WHERE id=?
+				UPDATE dances SET name=?, choreographer=?, level=?, count=?, wall=?, tag=?, restart=?, stepsheet_url=?, known_status=?, category=?, priority=?, action=?, notes=? WHERE id=?
 			''', (
 				dialog.name_input.text(),
 				dialog.choreo_input.text(),
 				dialog.level_input.text(),
 				dialog.count_input.text(),
 				dialog.wall_input.text(),
+				dialog.tag_input.text(),
+				dialog.restart_input.text(),
 				dialog.url_input.text(),
 				dialog.known_combo.currentText(),
 				dialog.category_combo.currentText(),
@@ -139,6 +143,8 @@ class MainWindow(QMainWindow):
 		level = dialog.level_input.text()
 		count = dialog.count_input.text()
 		wall = dialog.wall_input.text()
+		tag = dialog.tag_input.text()
+		restart = dialog.restart_input.text()
 		url = dialog.url_input.text()
 		known = dialog.known_combo.currentText()
 		category = dialog.category_combo.currentText()
@@ -153,10 +159,10 @@ class MainWindow(QMainWindow):
 			conn = get_connection()
 			c = conn.cursor()
 			c.execute('''
-				INSERT INTO dances (name, choreographer, level, count, wall, stepsheet_url, known_status, category, priority, action, notes)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO dances (name, choreographer, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			''', (
-				name, choreo, level, count, wall, url, known, category, priority, action, notes
+				name, choreo, level, count, wall, tag, restart, url, known, category, priority, action, notes
 			))
 			conn.commit()
 			conn.close()
@@ -167,9 +173,9 @@ class MainWindow(QMainWindow):
 	def load_dances(self):
 		conn = get_connection()
 		c = conn.cursor()
-		c.execute("SELECT name, choreographer, level, known_status, category, priority, action FROM dances")
+		c.execute("SELECT name, choreographer, level, count, wall, tag, restart, known_status, category, priority, action FROM dances")
 		rows = c.fetchall()
-		headers = ["Name", "Choreographer", "Level", "Known", "Category", "Priority", "Action"]
+		headers = ["Name", "Choreographer", "Level", "Count", "Wall", "Tag", "Restart", "Known", "Category", "Priority", "Action"]
 		self.table.setRowCount(len(rows))
 		self.table.setColumnCount(len(headers))
 		self.table.setHorizontalHeaderLabels(headers)

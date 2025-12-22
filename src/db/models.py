@@ -17,6 +17,8 @@ def initialize_db():
 			level TEXT,
 			count TEXT,
 			wall TEXT,
+			tag TEXT,
+			restart TEXT,
 			stepsheet_url TEXT,
 			known_status TEXT,
 			category TEXT,
