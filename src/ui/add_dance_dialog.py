@@ -83,3 +83,7 @@ class AddDanceDialog(QDialog):
         # Connect fetch button
         if self.fetch_callback:
             self.fetch_btn.clicked.connect(lambda: self.fetch_callback(self.url_input.text(), self))
+
+        # Connect Save and Cancel buttons
+        self.save_btn.clicked.connect(self.accept)
+        self.cancel_btn.clicked.connect(self.reject)

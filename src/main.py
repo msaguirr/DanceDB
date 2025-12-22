@@ -129,32 +129,40 @@ class MainWindow(QMainWindow):
 				dialog.wall_input.setText(data.get('wall', ''))
 				dialog.notes_input.setPlainText(data.get('notes', ''))
 		dialog = AddDanceDialog(fetch_callback=fetch_callback, parent=self)
-		dialog.save_btn.clicked.connect(lambda: self.save_dance(dialog))
-		dialog.exec_()
+		result = dialog.exec_()
+		if result == QDialog.Accepted:
+			self.save_dance(dialog)
 
 	def save_dance(self, dialog):
-		conn = get_connection()
-		c = conn.cursor()
-		c.execute('''
-			INSERT INTO dances (name, choreographer, level, count, wall, stepsheet_url, known_status, category, priority, action, notes)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		''', (
-			dialog.name_input.text(),
-			dialog.choreo_input.text(),
-			dialog.level_input.text(),
-			dialog.count_input.text(),
-			dialog.wall_input.text(),
-			dialog.url_input.text(),
-			dialog.known_combo.currentText(),
-			dialog.category_combo.currentText(),
-			dialog.priority_combo.currentText(),
-			dialog.action_combo.currentText(),
-			dialog.notes_input.toPlainText()
-		))
-		conn.commit()
-		conn.close()
-		dialog.accept()
-		self.load_dances()
+		name = dialog.name_input.text()
+		choreo = dialog.choreo_input.text()
+		level = dialog.level_input.text()
+		count = dialog.count_input.text()
+		wall = dialog.wall_input.text()
+		url = dialog.url_input.text()
+		known = dialog.known_combo.currentText()
+		category = dialog.category_combo.currentText()
+		priority = dialog.priority_combo.currentText()
+		action = dialog.action_combo.currentText()
+		notes = dialog.notes_input.toPlainText()
+		from PyQt5.QtWidgets import QMessageBox
+		if not name.strip():
+			QMessageBox.warning(dialog, "Missing Name", "Dance name is required.")
+			return
+		try:
+			conn = get_connection()
+			c = conn.cursor()
+			c.execute('''
+				INSERT INTO dances (name, choreographer, level, count, wall, stepsheet_url, known_status, category, priority, action, notes)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			''', (
+				name, choreo, level, count, wall, url, known, category, priority, action, notes
+			))
+			conn.commit()
+			conn.close()
+			self.load_dances()
+		except Exception as e:
+			QMessageBox.critical(dialog, "Error", f"Failed to save dance: {e}")
 
 	def load_dances(self):
 		conn = get_connection()
