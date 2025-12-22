@@ -8,36 +8,64 @@ def scrape_dance_info(url):
 	Returns a dict with keys: name, choreographer, level, notes
 	"""
 	try:
-		resp = requests.get(url, timeout=10)
+		headers = {
+			'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+		}
+		resp = requests.get(url, headers=headers, timeout=10)
 		resp.raise_for_status()
 		soup = BeautifulSoup(resp.text, 'html.parser')
 
-		# Example selectors for CopperKnob (adjust as needed)
-		name = soup.find('h1').get_text(strip=True) if soup.find('h1') else ''
+		# Dance name from meta or title
+		name = ''
+		meta_title = soup.find('meta', attrs={'name': 'title'})
+		if meta_title and meta_title.get('content'):
+			name = meta_title['content']
+		else:
+			title_tag = soup.find('title')
+			if title_tag:
+				# e.g. "CopperKnob - Power Jam - Kathi Stringer"
+				parts = title_tag.get_text(strip=True).split(' - ')
+				if len(parts) >= 2:
+					name = parts[1]
+
+		# Choreographer from meta or title
 		choreo = ''
+		meta_desc = soup.find('meta', attrs={'name': 'description'})
+		if meta_desc and meta_desc.get('content'):
+			desc = meta_desc['content']
+			# e.g. "22 Count 4 Wall Beginner Line Dance - Kathi Stringer"
+			if '-' in desc:
+				choreo = desc.split('-')[-1].strip()
+		if not choreo:
+			if title_tag and len(parts) >= 3:
+				choreo = parts[2]
+
+		# Level, count, wall from meta description
 		level = ''
-		notes = ''
-		# Try to find choreographer and level in the info table
-		info_table = soup.find('table', class_='table')
-		if info_table:
-			for row in info_table.find_all('tr'):
-				th = row.find('th')
-				td = row.find('td')
-				if th and td:
-					label = th.get_text(strip=True).lower()
-					value = td.get_text(strip=True)
-					if 'choreographer' in label:
-						choreo = value
-					elif 'level' in label:
-						level = value
-		# Notes or description (optional)
-		desc = soup.find('div', class_='description')
-		if desc:
-			notes = desc.get_text(strip=True)
+		count = ''
+		wall = ''
+		if meta_desc and meta_desc.get('content'):
+			desc = meta_desc['content']
+			# Try to extract e.g. "22 Count 4 Wall Beginner"
+			import re
+			m = re.match(r"(\d+) Count (\d+) Wall ([^\-]+)", desc)
+			if m:
+				count = m.group(1)
+				wall = m.group(2)
+				level = m.group(3).strip()
+			else:
+				# fallback: just use the whole string before the dash
+				level = desc.split('-')[0].strip()
+
+		# Notes: use meta description for now
+		notes = meta_desc['content'] if meta_desc and meta_desc.get('content') else ''
+
 		return {
 			'name': name,
 			'choreographer': choreo,
 			'level': level,
+			'count': count,
+			'wall': wall,
 			'notes': notes
 		}
 	except Exception as e:

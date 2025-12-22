@@ -15,6 +15,8 @@ def initialize_db():
 			name TEXT NOT NULL,
 			choreographer TEXT,
 			level TEXT,
+			count TEXT,
+			wall TEXT,
 			stepsheet_url TEXT,
 			known_status TEXT,
 			category TEXT,
