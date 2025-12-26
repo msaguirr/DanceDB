@@ -32,7 +32,6 @@ def parse_copperknob_html(filepath):
 	choreo_tag = soup.find('div', class_='sheetinfochoregrapher')
 	if choreo_tag:
 		choreo_spans = choreo_tag.find_all('span')
-		print(choreo_spans)
 		for span in choreo_spans:
 			for part in span.stripped_strings:
 				# Remove release date if present (e.g., ' - October 2019')

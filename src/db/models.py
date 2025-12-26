@@ -14,6 +14,7 @@ def initialize_db():
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			name TEXT NOT NULL,
 			choreographer TEXT,
+			release_date TEXT,
 			level TEXT,
 			count TEXT,
 			wall TEXT,
