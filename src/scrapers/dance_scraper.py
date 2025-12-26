@@ -34,17 +34,17 @@ def parse_copperknob_html(filepath):
 		choreo_spans = choreo_tag.find_all('span')
 		for span in choreo_spans:
 			for part in span.stripped_strings:
-				# Remove release date if present (e.g., ' - October 2019')
-				part_clean = part
-				if ' - ' in part:
-					part_clean, possible_date = part.rsplit(' - ', 1)
-					# Accept only if possible_date looks like a date (e.g., contains a month and year)
-					if any(month in possible_date for month in [
-						'January','February','March','April','May','June','July','August','September','October','November','December']):
-						release_date = possible_date.strip()
-				# Split on '&', 'and', and ','
 				import re
-				choreo_entries = re.split(r'\s*(?:&|and|,)\s*', part_clean)
+				choreo_entries = re.split(r'\s*(?:&|and|,)\s*', part)
+				# If the last entry looks like a release date, extract it
+				if choreo_entries:
+					last_entry = choreo_entries[-1].strip()
+					months = [
+						'January','February','March','April','May','June','July','August','September','October','November','December']
+					if any(month in last_entry for month in months):
+						# Remove any leading dash or whitespace
+						release_date = last_entry.lstrip('-').strip()
+						choreo_entries = choreo_entries[:-1]
 				for entry in choreo_entries:
 					entry = entry.strip()
 					if not entry:
@@ -89,24 +89,54 @@ def parse_copperknob_html(filepath):
 		if level_div:
 			level = level_div.get_text(strip=True)
 
-	# Music
-	song_title = ''
-	song_artist = ''
+	# Music (extract all songs and switches)
+	songs = []
 	music_tag = soup.find('div', class_='sheetinfomusic')
 	if music_tag:
-		music_span = music_tag.find('span')
-		if music_span:
-			# Format: <A>Song Title</A> - Artist<br>
-			a_tag = music_span.find('a')
-			if a_tag:
-				song_title = a_tag.get_text(strip=True)
-				# The rest after the <a> is the artist
-				text = music_span.get_text(separator=' ', strip=True)
-				if ' - ' in text:
-					song_artist = text.split(' - ', 1)[-1].split()[0]
-					# Try to get full artist name
-					after_dash = text.split(' - ', 1)[-1]
-					song_artist = after_dash.split(' ', 1)[-1] if ' ' in after_dash else after_dash
+		# Find all <span> and <a> tags that represent songs
+		# The main song is usually in the first <span> with an <a>
+		# Song switches may be in subsequent <span> or <br> separated lines
+		music_spans = music_tag.find_all('span')
+		for span in music_spans:
+			# Each span may contain one or more songs (separated by <br> or multiple <a> tags)
+			# Find all <a> tags in this span
+			a_tags = span.find_all('a')
+			for a_tag in a_tags:
+				title = a_tag.get_text(strip=True)
+				# Try to get artist: look for text after <a> and ' - '
+				next_sibling = a_tag.next_sibling
+				artist = ''
+				if next_sibling:
+					# Sometimes artist is after ' - '
+					text = str(next_sibling)
+					if ' - ' in text:
+						artist = text.split(' - ', 1)[-1].strip()
+					else:
+						# Sometimes artist is just after the <a>
+						artist = text.strip()
+				# If artist is still empty, try to get from span text
+				if not artist:
+					span_text = span.get_text(separator=' ', strip=True)
+					if ' - ' in span_text:
+						artist = span_text.split(' - ', 1)[-1].strip()
+				songs.append({'title': title, 'artist': artist})
+		# If no <span>, fallback to direct <a> in music_tag
+		if not songs:
+			a_tags = music_tag.find_all('a')
+			for a_tag in a_tags:
+				title = a_tag.get_text(strip=True)
+				next_sibling = a_tag.next_sibling
+				artist = ''
+				if next_sibling:
+					text = str(next_sibling)
+					if ' - ' in text:
+						artist = text.split(' - ', 1)[-1].strip()
+					else:
+						artist = text.strip()
+				songs.append({'title': title, 'artist': artist})
+	# Backward compatibility: also set song_title and song_artist for main song
+	song_title = songs[0]['title'] if songs else ''
+	song_artist = songs[0]['artist'] if songs else ''
 
 	# Step Sheet Instructions
 	steps = []
@@ -135,6 +165,7 @@ def parse_copperknob_html(filepath):
 		'level': level,
 		'song_title': song_title,
 		'song_artist': song_artist,
+		'songs': songs,  # list of dicts with title/artist
 		'steps': steps
 	}
 
