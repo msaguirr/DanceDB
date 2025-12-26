@@ -12,7 +12,6 @@ def parse_copperknob_html(filepath):
 		html = f.read()
 	soup = BeautifulSoup(html, 'html.parser')
 
-
 	# Dance Name (from h2.sectionbar or meta title)
 	dance_name = ''
 	h2_sectionbar = soup.find('h2', attrs={'style': True})
@@ -31,39 +30,34 @@ def parse_copperknob_html(filepath):
 	release_date = ''
 	choreo_tag = soup.find('div', class_='sheetinfochoregrapher')
 	if choreo_tag:
-		choreo_spans = choreo_tag.find_all('span')
-		for span in choreo_spans:
-			for part in span.stripped_strings:
-				import re
-				choreo_entries = re.split(r'\s*(?:&|and|,)\s*', part)
-				# If the last entry looks like a release date, extract it
-				if choreo_entries:
-					last_entry = choreo_entries[-1].strip()
-					months = [
-						'January','February','March','April','May','June','July','August','September','October','November','December']
-					if any(month in last_entry for month in months):
-						# Remove any leading dash or whitespace
-						release_date = last_entry.lstrip('-').strip()
-						choreo_entries = choreo_entries[:-1]
-				for entry in choreo_entries:
-					entry = entry.strip()
-					if not entry:
-						continue
-					# If entry is just a country (e.g., (Australia)), assign to previous choreographer
-					if entry.startswith('(') and entry.endswith(')'):
-						country_part = entry[1:-1].strip()
-						if choreographers and not choreographers[-1]['country']:
-							choreographers[-1]['country'] = country_part
-						# else: ignore orphan country
-					# If entry is Name (Country)
-					elif '(' in entry and entry.endswith(')'):
-						name_part = entry[:entry.rfind('(')].strip()
-						country_part = entry[entry.rfind('(')+1:-1].strip()
-						if name_part:
-							choreographers.append({'name': name_part, 'country': country_part})
-					# If entry is just a name
-					else:
-						choreographers.append({'name': entry, 'country': ''})
+		# Combine all text in the choreo_tag
+		full_text = ' '.join(choreo_tag.stripped_strings)
+		# Remove 'Choreo:' and 'Choreographer:' prefixes if present
+		for prefix in ['Choreo:', 'Choreographer:']:
+			if full_text.lower().startswith(prefix.lower()):
+				full_text = full_text[len(prefix):].strip()
+		# Split off release date (after last dash)
+		import re
+		dash_split = re.split(r'\s*-\s*', full_text)
+		if len(dash_split) > 1:
+			release_date = dash_split[-1].strip()
+			choreo_text = '-'.join(dash_split[:-1]).strip()
+		else:
+			choreo_text = full_text.strip()
+		# Split choreographers by & or 'and' (case-insensitive)
+		choreo_entries = re.split(r'\s*(?:&|and)\s*', choreo_text, flags=re.IGNORECASE)
+		for entry in choreo_entries:
+			entry = entry.strip()
+			if not entry:
+				continue
+			# If entry is Name (Country)
+			m = re.match(r'^(.*?)\s*\((.*?)\)$', entry)
+			if m:
+				name_part = m.group(1).strip()
+				country_part = m.group(2).strip()
+				choreographers.append({'name': name_part, 'country': country_part})
+			else:
+				choreographers.append({'name': entry, 'country': ''})
 
 	# Count
 	count = ''
@@ -112,7 +106,6 @@ def parse_copperknob_html(filepath):
 					if ' - ' in text:
 						artist = text.split(' - ', 1)[-1].strip()
 					else:
-						# Sometimes artist is just after the <a>
 						artist = text.strip()
 				# If artist is still empty, try to get from span text
 				if not artist:
@@ -168,6 +161,7 @@ def parse_copperknob_html(filepath):
 		'songs': songs,  # list of dicts with title/artist
 		'steps': steps
 	}
+
 
 def scrape_dance_info(url):
 	"""
