@@ -88,10 +88,9 @@ class AddDanceDialog(QDialog):
         self.action_combo.addItems(["", "Learn", "Practice"])
         layout.addWidget(self.action_combo)
 
-        # Notes
-        layout.addWidget(QLabel("Notes:"))
+        # Notes (hidden)
         self.notes_input = QTextEdit()
-        layout.addWidget(self.notes_input)
+        self.notes_input.hide()
 
         # Buttons
         btn_layout = QHBoxLayout()
