@@ -1,6 +1,6 @@
 import sqlite3
 
-DB_PATH = "dance_db.sqlite3"
+DB_PATH = "data/dance_db.sqlite3"
 
 def get_connection():
 	return sqlite3.connect(DB_PATH)
