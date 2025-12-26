@@ -58,6 +58,12 @@ class AddDanceDialog(QDialog):
         self.restart_input = QLineEdit()
         layout.addWidget(self.restart_input)
 
+        # Songs (multi-line for all song info/switches)
+        layout.addWidget(QLabel("Songs:"))
+        self.songs_input = QTextEdit()
+        self.songs_input.setReadOnly(True)
+        layout.addWidget(self.songs_input)
+
         # Known Status
         layout.addWidget(QLabel("Known Status:"))
         self.known_combo = QComboBox()

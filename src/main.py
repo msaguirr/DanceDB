@@ -82,6 +82,14 @@ class MainWindow(QMainWindow):
 				dialog.level_input.setText(scraped.get('level', ''))
 				dialog.count_input.setText(scraped.get('count', ''))
 				dialog.wall_input.setText(scraped.get('wall', ''))
+				# Populate Songs field with all song info/switches
+				if hasattr(dialog, 'songs_input'):
+					songs = scraped.get('songs', [])
+					if songs:
+						song_lines = [f"{s['title']} - {s['artist']}" if s['artist'] else s['title'] for s in songs]
+						dialog.songs_input.setPlainText('\n'.join(song_lines))
+					else:
+						dialog.songs_input.setPlainText('')
 				dialog.notes_input.setPlainText(scraped.get('notes', ''))
 		from ui.add_dance_dialog import AddDanceDialog
 		dialog = AddDanceDialog(fetch_callback=fetch_callback, parent=self)
@@ -158,6 +166,14 @@ class MainWindow(QMainWindow):
 				dialog.level_input.setText(scraped.get('level', ''))
 				dialog.count_input.setText(scraped.get('count', ''))
 				dialog.wall_input.setText(scraped.get('wall', ''))
+				# Populate Songs field with all song info/switches
+				if hasattr(dialog, 'songs_input'):
+					songs = scraped.get('songs', [])
+					if songs:
+						song_lines = [f"{s['title']} - {s['artist']}" if s['artist'] else s['title'] for s in songs]
+						dialog.songs_input.setPlainText('\n'.join(song_lines))
+					else:
+						dialog.songs_input.setPlainText('')
 				dialog.notes_input.setPlainText(scraped.get('notes', ''))
 		dialog = AddDanceDialog(fetch_callback=fetch_callback, parent=self)
 		result = dialog.exec_()
