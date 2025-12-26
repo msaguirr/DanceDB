@@ -37,6 +37,12 @@ class AddDanceDialog(QDialog):
         layout.addWidget(self.count_input)
 
 
+
+        # Release Date
+        layout.addWidget(QLabel("Release Date:"))
+        self.release_date_input = QLineEdit()
+        layout.addWidget(self.release_date_input)
+
         # Wall
         layout.addWidget(QLabel("Wall:"))
         self.wall_input = QLineEdit()

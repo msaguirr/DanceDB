@@ -51,7 +51,7 @@ class MainWindow(QMainWindow):
 			return
 		conn = get_connection()
 		c = conn.cursor()
-		c.execute("SELECT name, choreographer, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes FROM dances WHERE id=?", (row_id,))
+		c.execute("SELECT name, choreographer, release_date, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes FROM dances WHERE id=?", (row_id,))
 		data = c.fetchone()
 		conn.close()
 		if not data:
@@ -62,7 +62,23 @@ class MainWindow(QMainWindow):
 			scraped = scrape_dance_info(url)
 			if scraped:
 				dialog.name_input.setText(scraped.get('dance_name', ''))
-				dialog.choreo_input.setText(scraped.get('choreographer', ''))
+				# Format choreographers list for display (just names, no countries)
+				choreos = scraped.get('choreographers', [])
+				if isinstance(choreos, list):
+					names = []
+					for c in choreos:
+						if isinstance(c, dict):
+							name = c.get('name', '')
+							if name and name.strip():
+								names.append(name.strip())
+					choreo_str = ', '.join(names)
+				else:
+					choreo_str = str(choreos).strip()
+				dialog.choreo_input.setText(choreo_str)
+
+				# Set release date if present
+				if hasattr(dialog, 'release_date_input'):
+					dialog.release_date_input.setText(scraped.get('release_date', ''))
 				dialog.level_input.setText(scraped.get('level', ''))
 				dialog.count_input.setText(scraped.get('count', ''))
 				dialog.wall_input.setText(scraped.get('wall', ''))
@@ -71,17 +87,19 @@ class MainWindow(QMainWindow):
 		dialog = AddDanceDialog(fetch_callback=fetch_callback, parent=self)
 		dialog.name_input.setText(data[0])
 		dialog.choreo_input.setText(data[1])
-		dialog.level_input.setText(data[2])
-		dialog.count_input.setText(data[3])
-		dialog.wall_input.setText(data[4])
-		dialog.tag_input.setText(data[5] or "")
-		dialog.restart_input.setText(data[6] or "")
-		dialog.url_input.setText(data[7])
-		dialog.known_combo.setCurrentText(data[8] or "")
-		dialog.category_combo.setCurrentText(data[9] or "")
-		dialog.priority_combo.setCurrentText(data[10] or "")
-		dialog.action_combo.setCurrentText(data[11] or "")
-		dialog.notes_input.setPlainText(data[12] or "")
+		if hasattr(dialog, 'release_date_input'):
+			dialog.release_date_input.setText(data[2] or "")
+		dialog.level_input.setText(data[3])
+		dialog.count_input.setText(data[4])
+		dialog.wall_input.setText(data[5])
+		dialog.tag_input.setText(data[6] or "")
+		dialog.restart_input.setText(data[7] or "")
+		dialog.url_input.setText(data[8])
+		dialog.known_combo.setCurrentText(data[9] or "")
+		dialog.category_combo.setCurrentText(data[10] or "")
+		dialog.priority_combo.setCurrentText(data[11] or "")
+		dialog.action_combo.setCurrentText(data[12] or "")
+		dialog.notes_input.setPlainText(data[13] or "")
 		if dialog.exec_():
 			# Save changes
 			conn = get_connection()
@@ -124,14 +142,23 @@ class MainWindow(QMainWindow):
 
 	def open_add_dialog(self):
 		def fetch_callback(url, dialog):
-			data = scrape_dance_info(url)
-			if data:
-				dialog.name_input.setText(data.get('dance_name', ''))
-				dialog.choreo_input.setText(data.get('choreographer', ''))
-				dialog.level_input.setText(data.get('level', ''))
-				dialog.count_input.setText(data.get('count', ''))
-				dialog.wall_input.setText(data.get('wall', ''))
-				dialog.notes_input.setPlainText(data.get('notes', ''))
+			scraped = scrape_dance_info(url)
+			if scraped:
+				dialog.name_input.setText(scraped.get('dance_name', ''))
+				choreos = scraped.get('choreographers', [])
+				if isinstance(choreos, list):
+					choreo_str = ', '.join(
+						c['name'] for c in choreos if isinstance(c, dict)
+					)
+				else:
+					choreo_str = str(choreos)
+				dialog.choreo_input.setText(choreo_str)
+				if hasattr(dialog, 'release_date_input'):
+					dialog.release_date_input.setText(scraped.get('release_date', ''))
+				dialog.level_input.setText(scraped.get('level', ''))
+				dialog.count_input.setText(scraped.get('count', ''))
+				dialog.wall_input.setText(scraped.get('wall', ''))
+				dialog.notes_input.setPlainText(scraped.get('notes', ''))
 		dialog = AddDanceDialog(fetch_callback=fetch_callback, parent=self)
 		result = dialog.exec_()
 		if result == QDialog.Accepted:
@@ -140,6 +167,7 @@ class MainWindow(QMainWindow):
 	def save_dance(self, dialog):
 		name = dialog.name_input.text()
 		choreo = dialog.choreo_input.text()
+		release_date = dialog.release_date_input.text() if hasattr(dialog, 'release_date_input') else ''
 		level = dialog.level_input.text()
 		count = dialog.count_input.text()
 		wall = dialog.wall_input.text()
@@ -159,10 +187,10 @@ class MainWindow(QMainWindow):
 			conn = get_connection()
 			c = conn.cursor()
 			c.execute('''
-				INSERT INTO dances (name, choreographer, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				INSERT INTO dances (name, choreographer, release_date, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			''', (
-				name, choreo, level, count, wall, tag, restart, url, known, category, priority, action, notes
+				name, choreo, release_date, level, count, wall, tag, restart, url, known, category, priority, action, notes
 			))
 			conn.commit()
 			conn.close()
@@ -173,9 +201,9 @@ class MainWindow(QMainWindow):
 	def load_dances(self):
 		conn = get_connection()
 		c = conn.cursor()
-		c.execute("SELECT name, choreographer, level, count, wall, tag, restart, known_status, category, priority, action FROM dances")
+		c.execute("SELECT name, choreographer, release_date, level, count, wall, tag, restart, known_status, category, priority, action FROM dances")
 		rows = c.fetchall()
-		headers = ["Name", "Choreographer", "Level", "Count", "Wall", "Tag", "Restart", "Known", "Category", "Priority", "Action"]
+		headers = ["Name", "Choreographer", "Release Date", "Level", "Count", "Wall", "Tag", "Restart", "Known", "Category", "Priority", "Action"]
 		self.table.setRowCount(len(rows))
 		self.table.setColumnCount(len(headers))
 		self.table.setHorizontalHeaderLabels(headers)
