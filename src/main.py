@@ -14,7 +14,12 @@ class MainWindow(QMainWindow):
 		# Layout with table and buttons
 		central = QWidget()
 		layout = QVBoxLayout()
+		from PyQt5.QtGui import QPalette, QColor
 		self.table = QTableWidget()
+		self.table.setAlternatingRowColors(True)
+		self.table.setShowGrid(True)
+		# Set a more contrasted grid color using stylesheet for reliability
+		self.table.setStyleSheet("QTableWidget { gridline-color: #B0B0B0; }")
 		layout.addWidget(self.table)
 		btn_layout = QHBoxLayout()
 		self.add_btn = QPushButton("Add Dance")
