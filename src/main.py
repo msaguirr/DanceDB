@@ -16,6 +16,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         from PyQt5.QtGui import QPalette, QColor
         self.table = QTableWidget()
+        # Make entire row select when any cell is clicked
+        from PyQt5.QtWidgets import QAbstractItemView
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setAlternatingRowColors(True)
         self.table.setShowGrid(True)
         # Set a more contrasted grid color using stylesheet for reliability
@@ -280,6 +283,9 @@ class MainWindow(QMainWindow):
                 self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
             self.table.setItem(row_idx, 9, QTableWidgetItem(str(choreographer)))
             self.table.setItem(row_idx, 10, QTableWidgetItem(str(release_date)))
+            # Resize the 'Level' column to fit its contents
+            level_col = headers.index("Level")
+            self.table.resizeColumnToContents(level_col)
         conn.close()
 
     def handle_header_clicked(self, logicalIndex):
