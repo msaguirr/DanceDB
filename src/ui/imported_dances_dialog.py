@@ -91,11 +91,95 @@ class ImportedDancesDialog(QDialog):
 
         main_layout.addLayout(left_layout, 2)
         main_layout.addLayout(right_layout, 3)
-        self.setLayout(main_layout)
+        # Add Save All Fetched button at bottom right
+        bottom_btn_layout = QHBoxLayout()
+        bottom_btn_layout.addStretch(1)
+        self.save_all_btn = QPushButton("Save All Fetched")
+        self.save_all_btn.clicked.connect(self.save_all_fetched)
+        bottom_btn_layout.addWidget(self.save_all_btn)
+        # Wrap main layout and button in a vertical layout
+        wrapper_layout = QVBoxLayout()
+        wrapper_layout.addLayout(main_layout)
+        wrapper_layout.addLayout(bottom_btn_layout)
+        self.setLayout(wrapper_layout)
         self.update_count()
+    def save_all_fetched(self):
+        # Save all fetched dances to the database using logic similar to save_dance in main.py
+        from db.models import get_connection
+        from PyQt5.QtWidgets import QMessageBox
+        if not self.fetched_dances:
+            QMessageBox.warning(self, "No Fetched Dances", "No fetched dances to save.")
+            return
+        try:
+            conn = get_connection()
+            c = conn.cursor()
+            count_saved = 0
+            for info in self.fetched_dances:
+                if not info:
+                    continue
+                # Extract fields, using same keys as AddDanceDialog/main.py
+                name = info.get('dance_name') or info.get('name') or info.get('title', '')
+                # Choreographer(s): join names if list, fallback to string
+                choreos = info.get('choreographers')
+                if isinstance(choreos, list):
+                    choreo = ', '.join(c.get('name', '') for c in choreos if isinstance(c, dict))
+                else:
+                    choreo = str(choreos) if choreos else info.get('choreographer', '')
+                release_date = info.get('release_date', '')
+                level = info.get('level', '')
+                count = info.get('count', '')
+                wall = info.get('wall', '')
+                tag = info.get('tag', '')
+                restart = info.get('restart', '')
+                url = info.get('url', '') or info.get('stepsheet_url', '')
+                known = info.get('known_status', '')
+                category = info.get('category', '')
+                priority = info.get('priority', '')
+                action = info.get('action', '')
+                notes = info.get('notes', '')
+                # Songs: list of dicts with title/artist
+                songs = info.get('songs', [])
+                # Insert dance
+                c.execute('''
+                    INSERT INTO dances (name, choreographer, release_date, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    name, choreo, release_date, level, count, wall, tag, restart, url, known, category, priority, action, notes
+                ))
+                dance_id = c.lastrowid
+                # Insert songs and dance-song links
+                for song in songs:
+                    song_title = song.get('title', '')
+                    if not song_title:
+                        continue
+                    c.execute('SELECT id FROM songs WHERE title=?', (song_title,))
+                    song_row = c.fetchone()
+                    if song_row:
+                        song_id = song_row[0]
+                    else:
+                        c.execute('INSERT INTO songs (title) VALUES (?)', (song_title,))
+                        song_id = c.lastrowid
+                    c.execute('INSERT INTO dance_songs (dance_id, song_id) VALUES (?, ?)', (dance_id, song_id))
+                count_saved += 1
+            conn.commit()
+            conn.close()
+            QMessageBox.information(self, "Batch Save Complete", f"Saved {count_saved} dances to the database.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save dances: {e}")
 
         # Store fetched data: list of dicts
         self.fetched_dances = []
+
+        # Refresh main window's dance list if possible
+        parent = self.parent()
+        try:
+            from src.main import MainWindow
+        except ImportError:
+            MainWindow = None
+        if parent and (MainWindow is None or isinstance(parent, MainWindow)):
+            # Defensive: if MainWindow import fails, still try to call load_dances
+            if hasattr(parent, 'load_dances'):
+                parent.load_dances()
 
     def fetch_selected(self):
         from PyQt5.QtWidgets import QMessageBox
