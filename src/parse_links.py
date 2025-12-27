@@ -37,6 +37,20 @@ def write_to_csv(data, output_file, header):
             writer.writerow(row)
 
 def main():
+    # Extract just Stepsheet Link and Song Name from copperknob_links_extracted.csv
+    input_csv = OUTPUT_FILE
+    output_csv = 'assets/copperknob_links_and_songs.csv'
+    with open(input_csv, 'r', encoding='utf-8') as infile, open(output_csv, 'w', newline='', encoding='utf-8') as outfile:
+        reader = csv.reader(infile)
+        writer = csv.writer(outfile)
+        # Write header
+        writer.writerow(['Stepsheet Link', 'Song Name'])
+        for i, row in enumerate(reader):
+            if i == 0:
+                continue  # skip header
+            if len(row) >= 2:
+                writer.writerow([row[0], row[1]])
+    print(f"Extracted Stepsheet Link and Song Name to {output_csv}")
     last_line = get_last_line(INPUT_FILE)
     rows = extract_rows(last_line)
     header = [
