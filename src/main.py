@@ -26,10 +26,18 @@ class MainWindow(QMainWindow):
 		self.delete_btn = QPushButton("Delete Selected")
 		self.delete_btn.clicked.connect(self.delete_selected)
 		btn_layout.addWidget(self.delete_btn)
+		self.show_imported_btn = QPushButton("Batch Import")
+		self.show_imported_btn.clicked.connect(self.open_imported_dances_dialog)
+		btn_layout.addWidget(self.show_imported_btn)
 		layout.addLayout(btn_layout)
 		central.setLayout(layout)
 		self.setCentralWidget(central)
 		self.load_dances()
+
+	def open_imported_dances_dialog(self):
+		from ui.imported_dances_dialog import ImportedDancesDialog
+		dlg = ImportedDancesDialog(self)
+		dlg.exec_()
 	def get_selected_row_id(self):
 		row = self.table.currentRow()
 		if row < 0:
@@ -215,17 +223,41 @@ class MainWindow(QMainWindow):
 			QMessageBox.critical(dialog, "Error", f"Failed to save dance: {e}")
 
 	def load_dances(self):
+		from db.song_queries import get_songs_for_dance, get_dance_id_by_name_and_choreo
 		conn = get_connection()
 		c = conn.cursor()
 		c.execute("SELECT name, choreographer, release_date, level, count, wall, tag, restart, known_status, category, priority, action FROM dances")
 		rows = c.fetchall()
-		headers = ["Name", "Choreographer", "Release Date", "Level", "Count", "Wall", "Tag", "Restart", "Known", "Category", "Priority", "Action"]
+		headers = ["Name", "Songs", "Level", "Count", "Wall", "Known", "Category", "Priority", "Action", "Choreographer", "Release Date"]
 		self.table.setRowCount(len(rows))
 		self.table.setColumnCount(len(headers))
 		self.table.setHorizontalHeaderLabels(headers)
+		# Set wider columns for Name and Songs
+		self.table.setColumnWidth(0, 200)  # Name
+		self.table.setColumnWidth(1, 250)  # Songs
+		self.table.setColumnWidth(3, 60)   # Count
+		self.table.setColumnWidth(4, 60)   # Wall
 		for row_idx, row in enumerate(rows):
-			for col_idx, value in enumerate(row):
+			name = row[0]
+			choreographer = row[1]
+			release_date = row[2]
+			level = row[3]
+			dance_id = get_dance_id_by_name_and_choreo(name, choreographer)
+			if dance_id:
+				songs = get_songs_for_dance(dance_id)
+				song_str = ", ".join(songs)
+			else:
+				song_str = ""
+			# Insert name, songs, and level first
+			self.table.setItem(row_idx, 0, QTableWidgetItem(str(name)))
+			self.table.setItem(row_idx, 1, QTableWidgetItem(song_str))
+			self.table.setItem(row_idx, 2, QTableWidgetItem(str(level)))
+			# Insert the rest of the columns, skipping Tag (6) and Restart (7), and moving choreographer/release_date to end
+			rest = [row[4], row[5], row[8], row[9], row[10], row[11]]
+			for col_idx, value in enumerate(rest, start=3):
 				self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+			self.table.setItem(row_idx, 9, QTableWidgetItem(str(choreographer)))
+			self.table.setItem(row_idx, 10, QTableWidgetItem(str(release_date)))
 		conn.close()
 
 if __name__ == "__main__":
