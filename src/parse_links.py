@@ -4,37 +4,41 @@ from bs4 import BeautifulSoup
 
 INPUT_FILE = 'assets/dance_sheet.html'
 OUTPUT_FILE = 'assets/copperknob_links_extracted.csv'
+MISSING_STEPSHEET_FILE = 'assets/dances_missing_stepsheet.csv'
 
 def get_last_line(filename):
     with open(filename, 'r', encoding='utf-8') as f:
         lines = f.readlines()
         return lines[-1] if lines else ''
 
-def extract_links_and_context(html_line):
-    soup = BeautifulSoup(html_line, 'html.parser')
-    results = []
-    def extract_copperknob_url(href):
-        match = re.search(r'q=(https://www.copperknob.co.uk/[^&]+)', href)
-        if match:
-            return match.group(1)
-        return href
-    for a in soup.find_all('a', href=True):
-        href = a['href']
-        real_url = extract_copperknob_url(href)
-        if 'copperknob.co.uk' in real_url:
-            text = a.get_text(strip=True)
-            parent = a.find_parent()
-            row_data = []
-            if parent and parent.name == 'td':
-                tr = parent.find_parent('tr')
-                if tr:
-                    row_data = [td.get_text(strip=True) for td in tr.find_all('td')]
-            if not row_data:
-                row_data = [text]
-            results.append({'url': real_url, 'row': row_data})
-    return results
+def clean_link(link):
+    # Remove Google redirect prefix if present
+    match = re.search(r'q=(https?://[^&]+)', link)
+    if 'google.com/url?' in link and match:
+        return match.group(1)
+    return link
 
-def write_to_csv(data, output_file):
+def extract_rows(html_line):
+    soup = BeautifulSoup(html_line, 'html.parser')
+    rows = []
+    for tr in soup.find_all('tr'):
+        tds = tr.find_all('td')
+        row_data = [td.get_text(strip=True) for td in tds]
+        links = [clean_link(a['href']) for a in tr.find_all('a', href=True)]
+        rows.append({'row': row_data, 'links': links})
+    return rows
+
+def write_to_csv(data, output_file, header):
+    with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(header)
+        for item in data:
+            row = item['row']
+            writer.writerow(row)
+
+def main():
+    last_line = get_last_line(INPUT_FILE)
+    rows = extract_rows(last_line)
     header = [
         'Stepsheet Link',
         'Dance Name',
@@ -44,18 +48,45 @@ def write_to_csv(data, output_file):
         'Level',
         'Counts'
     ]
-    with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(header)
-        for item in data:
-            row = [item['url']] + item['row'] + [''] * (len(header) - 1 - len(item['row']))
-            writer.writerow(row)
-
-def main():
-    last_line = get_last_line(INPUT_FILE)
-    data = extract_links_and_context(last_line)
-    write_to_csv(data, OUTPUT_FILE)
-    print(f"Extracted {len(data)} CopperKnob links to {OUTPUT_FILE}")
+    missing_header = [
+        'Dance Name',
+        'Song Name',
+        'Trash',
+        'Choreographers',
+        'Level',
+        'Counts',
+        'Video Link'
+    ]
+    dances_with_stepsheet = []
+    dances_missing_stepsheet = []
+    # Skip the first two rows (header and possible subheader)
+    data_rows = rows[2:]
+    for row in data_rows:
+        # Find stepsheet link
+        stepsheet_link = None
+        video_link = None
+        for link in row['links']:
+            if 'copperknob.co.uk/stepsheets/' in link:
+                stepsheet_link = link
+            elif 'youtube.com' in link or 'youtu.be' in link or 'vimeo.com' in link:
+                video_link = link
+        if stepsheet_link:
+            # Write to main output
+            dances_with_stepsheet.append({
+                'row': [stepsheet_link] + row['row'][1:]
+            })
+        else:
+            # Write to missing stepsheet output
+            # If row has enough columns, skip first (link) column
+            base_row = row['row'][1:] if len(row['row']) == len(header) else row['row']
+            # Pad to match missing_header length minus video link
+            base_row = base_row + [''] * (len(missing_header) - 1 - len(base_row))
+            base_row.append(video_link if video_link else '')
+            dances_missing_stepsheet.append({'row': base_row})
+    write_to_csv(dances_with_stepsheet, OUTPUT_FILE, header)
+    write_to_csv(dances_missing_stepsheet, MISSING_STEPSHEET_FILE, missing_header)
+    print(f"Extracted {len(dances_with_stepsheet)} dances with stepsheet links to {OUTPUT_FILE}")
+    print(f"Extracted {len(dances_missing_stepsheet)} dances missing stepsheet links to {MISSING_STEPSHEET_FILE}")
 
 if __name__ == '__main__':
     main()
