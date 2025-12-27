@@ -71,12 +71,17 @@ class MainWindow(QMainWindow):
         if row < 0:
             return None
         # Get the dance name and choreographer to identify the row
-        name = self.table.item(row, 0).text() if self.table.item(row, 0) else None
-        choreo = self.table.item(row, 9).text() if self.table.item(row, 9) else None
+        name = self.table.item(row, 0).text().strip() if self.table.item(row, 0) else None
+        choreo = self.table.item(row, 9).text().strip() if self.table.item(row, 9) else None
         conn = get_connection()
         c = conn.cursor()
-        c.execute("SELECT id FROM dances WHERE name=? AND choreographer=?", (name, choreo))
+        # Try normal match
+        c.execute("SELECT id FROM dances WHERE name=? AND (choreographer=? OR choreographer IS NULL OR choreographer='')", (name, choreo))
         result = c.fetchone()
+        # Fallback: try matching by name only if not found
+        if not result and name:
+            c.execute("SELECT id FROM dances WHERE name=?", (name,))
+            result = c.fetchone()
         conn.close()
         return result[0] if result else None
 
@@ -198,15 +203,41 @@ class MainWindow(QMainWindow):
         if not name.strip():
             QMessageBox.warning(dialog, "Missing Name", "Dance name is required.")
             return
+        # Parse songs from dialog.songs_input (one per line, format: 'title - artist' or 'title')
+        song_lines = dialog.songs_input.toPlainText().strip().split('\n') if hasattr(dialog, 'songs_input') else []
+        songs = []
+        for line in song_lines:
+            line = line.strip()
+            if not line:
+                continue
+            if ' - ' in line:
+                title, artist = line.split(' - ', 1)
+                songs.append({'title': title.strip(), 'artist': artist.strip()})
+            else:
+                songs.append({'title': line, 'artist': ''})
         try:
             conn = get_connection()
             c = conn.cursor()
+            # Insert dance
             c.execute('''
                 INSERT INTO dances (name, choreographer, release_date, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 name, choreo, release_date, level, count, wall, tag, restart, url, known, category, priority, action, notes
             ))
+            dance_id = c.lastrowid
+            # Insert songs and dance-song links
+            for song in songs:
+                # Check if song already exists (by title)
+                c.execute('SELECT id FROM songs WHERE title=?', (song['title'],))
+                song_row = c.fetchone()
+                if song_row:
+                    song_id = song_row[0]
+                else:
+                    c.execute('INSERT INTO songs (title) VALUES (?)', (song['title'],))
+                    song_id = c.lastrowid
+                # Link dance and song
+                c.execute('INSERT INTO dance_songs (dance_id, song_id) VALUES (?, ?)', (dance_id, song_id))
             conn.commit()
             conn.close()
             self.load_dances()

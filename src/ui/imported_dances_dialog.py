@@ -7,7 +7,8 @@ class ImportedDancesDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Imported Dances")
-        self.resize(900, 600)
+        self.setFixedSize(1000, 900)
+        self.move(100, 100)
 
         main_layout = QHBoxLayout()
 
@@ -61,14 +62,22 @@ class ImportedDancesDialog(QDialog):
         details_layout = QVBoxLayout()
         self.details_widget.setLayout(details_layout)
         self.detail_fields = {}
-        for label in [
-            ("Dance Name", QLineEdit),
-            ("Choreographer", QLineEdit),
-            ("Level", QLineEdit),
-            ("Notes", QTextEdit),
-        ]:
-            l = QLabel(label[0]+":")
-            field = label[1]()
+        field_defs = [
+            ("Dance Name", QLineEdit, 'name'),
+            ("Choreographer(s)", QLineEdit, 'choreographers'),
+            ("Release Date", QLineEdit, 'release_date'),
+            ("Level", QLineEdit, 'level'),
+            ("Count", QLineEdit, 'count'),
+            ("Wall", QLineEdit, 'wall'),
+            ("Songs", QTextEdit, 'songs'),
+            ("Known Status", QLineEdit, 'known_status'),
+            ("Category", QLineEdit, 'category'),
+            ("Priority", QLineEdit, 'priority'),
+            ("Action", QLineEdit, 'action'),
+        ]
+        for label, widget_cls, key in field_defs:
+            l = QLabel(label + ":")
+            field = widget_cls()
             if isinstance(field, QLineEdit):
                 field.setReadOnly(True)
             elif isinstance(field, QTextEdit):
@@ -76,7 +85,7 @@ class ImportedDancesDialog(QDialog):
                 field.setMaximumHeight(60)
             details_layout.addWidget(l)
             details_layout.addWidget(field)
-            self.detail_fields[label[0].lower()] = field
+            self.detail_fields[key] = field
         self.details_widget.setVisible(False)
         right_layout.addWidget(self.details_widget)
 
@@ -132,10 +141,32 @@ class ImportedDancesDialog(QDialog):
                 elif isinstance(field, QTextEdit):
                     field.setPlainText("")
             return
-        self.detail_fields['dance name'].setText(info.get('name', ''))
-        self.detail_fields['choreographer'].setText(info.get('choreographer', ''))
+        # Set all fields from info dict
+        # Dance Name: try 'dance_name', fallback to 'name' or 'title'
+        dance_name = info.get('dance_name') or info.get('name') or info.get('title', '')
+        self.detail_fields['name'].setText(dance_name)
+        # Choreographer(s): join names if list, fallback to string
+        choreos = info.get('choreographers')
+        if isinstance(choreos, list):
+            names = ', '.join(c.get('name', '') for c in choreos if isinstance(c, dict))
+            self.detail_fields['choreographers'].setText(names)
+        else:
+            self.detail_fields['choreographers'].setText(str(choreos) if choreos else info.get('choreographer', ''))
+        self.detail_fields['release_date'].setText(info.get('release_date', ''))
         self.detail_fields['level'].setText(info.get('level', ''))
-        self.detail_fields['notes'].setPlainText(info.get('notes', ''))
+        self.detail_fields['count'].setText(info.get('count', ''))
+        self.detail_fields['wall'].setText(info.get('wall', ''))
+        # Songs: join list if present
+        songs = info.get('songs', [])
+        if isinstance(songs, list):
+            song_lines = [f"{s['title']} - {s['artist']}" if s.get('artist') else s.get('title', '') for s in songs]
+            self.detail_fields['songs'].setPlainText('\n'.join(song_lines))
+        else:
+            self.detail_fields['songs'].setPlainText(str(songs))
+        self.detail_fields['known_status'].setText(info.get('known_status', ''))
+        self.detail_fields['category'].setText(info.get('category', ''))
+        self.detail_fields['priority'].setText(info.get('priority', ''))
+        self.detail_fields['action'].setText(info.get('action', ''))
 
     def select_all(self):
         for cb in self.checkboxes:

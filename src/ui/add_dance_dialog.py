@@ -79,7 +79,7 @@ class AddDanceDialog(QDialog):
         # Priority
         layout.addWidget(QLabel("Priority:"))
         self.priority_combo = QComboBox()
-        self.priority_combo.addItems(["", "High", "Medium", "Low"])
+        self.priority_combo.addItems(["", "Highest", "High", "Medium", "Low", "Lowest"])
         layout.addWidget(self.priority_combo)
 
         # Action
