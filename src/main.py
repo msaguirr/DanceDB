@@ -187,65 +187,73 @@ class MainWindow(QMainWindow):
         if result == QDialog.Accepted:
             self.save_dance(dialog)
 
-    def save_dance(self, dialog):
-        name = dialog.name_input.text()
-        choreo = dialog.choreo_input.text()
-        release_date = dialog.release_date_input.text() if hasattr(dialog, 'release_date_input') else ''
-        level = dialog.level_input.text()
-        count = dialog.count_input.text()
-        wall = dialog.wall_input.text()
-        tag = dialog.tag_input.text()
-        restart = dialog.restart_input.text()
-        url = dialog.url_input.text()
-        known = dialog.known_combo.currentText()
-        category = dialog.category_combo.currentText()
-        priority = dialog.priority_combo.currentText()
-        action = dialog.action_combo.currentText()
-        notes = dialog.notes_input.toPlainText()
-        from PyQt5.QtWidgets import QMessageBox
-        if not name.strip():
-            QMessageBox.warning(dialog, "Missing Name", "Dance name is required.")
-            return
-        # Parse songs from dialog.songs_input (one per line, format: 'title - artist' or 'title')
-        song_lines = dialog.songs_input.toPlainText().strip().split('\n') if hasattr(dialog, 'songs_input') else []
-        songs = []
-        for line in song_lines:
-            line = line.strip()
-            if not line:
-                continue
-            if ' - ' in line:
-                title, artist = line.split(' - ', 1)
-                songs.append({'title': title.strip(), 'artist': artist.strip()})
+    def load_dances(self):
+        from db.song_queries import get_songs_for_dance, get_dance_id_by_name_and_choreo
+        # Preserve current sort state
+        sort_col = self.table.horizontalHeader().sortIndicatorSection()
+        sort_order = self.table.horizontalHeader().sortIndicatorOrder()
+        sorting_enabled = self.table.isSortingEnabled()
+        # Reset sort to unsorted before repopulating
+        self.table.setSortingEnabled(False)
+        self.table.horizontalHeader().setSortIndicator(-1, 0)
+
+        conn = get_connection()
+        c = conn.cursor()
+        c.execute("SELECT name, choreographer, release_date, level, count, wall, tag, restart, known_status, category, priority, action FROM dances")
+        rows = c.fetchall()
+        headers = ["Name", "Songs", "Level", "Count", "Wall", "Known", "Category", "Priority", "Action", "Choreographer", "Release Date"]
+        self.table.setRowCount(len(rows))
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+        # Set wider columns for Name and Songs
+        self.table.setColumnWidth(0, 200)  # Name
+        self.table.setColumnWidth(1, 250)  # Songs
+        self.table.setColumnWidth(3, 60)   # Count
+        self.table.setColumnWidth(4, 60)   # Wall
+        for row_idx, row in enumerate(rows):
+            name = row[0]
+            choreographer = row[1]
+            release_date = row[2]
+            level = row[3]
+            count = row[4]
+            wall = row[5]
+            # Tag (6) and Restart (7) are skipped
+            known = row[8]
+            category = row[9]
+            priority = row[10]
+            action = row[11]
+            # Songs (computed)
+            dance_id = get_dance_id_by_name_and_choreo(name, choreographer)
+            if dance_id:
+                songs = get_songs_for_dance(dance_id)
+                song_str = ", ".join(songs)
             else:
-                songs.append({'title': line, 'artist': ''})
-        try:
-            conn = get_connection()
-            c = conn.cursor()
-            # Insert dance
-            c.execute('''
-                INSERT INTO dances (name, choreographer, release_date, level, count, wall, tag, restart, stepsheet_url, known_status, category, priority, action, notes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                name, choreo, release_date, level, count, wall, tag, restart, url, known, category, priority, action, notes
-            ))
-            dance_id = c.lastrowid
-            # Insert songs and dance-song links
-            for song in songs:
-                # Check if song already exists (by title)
-                c.execute('SELECT id FROM songs WHERE title=?', (song['title'],))
-                song_row = c.fetchone()
-                if song_row:
-                    song_id = song_row[0]
-                else:
-                    c.execute('INSERT INTO songs (title) VALUES (?)', (song['title'],))
-                    song_id = c.lastrowid
-                # Link dance and song
-                c.execute('INSERT INTO dance_songs (dance_id, song_id) VALUES (?, ?)', (dance_id, song_id))
-            conn.commit()
-            conn.close()
-            self.load_dances()
-        except Exception as e:
-            QMessageBox.critical(dialog, "Error", f"Failed to save dance: {e}")
+                song_str = ""
+            # Build the row in the exact order of headers
+            row_data = [
+                name,           # Name
+                song_str,       # Songs
+                level,          # Level
+                count,          # Count
+                wall,           # Wall
+                known,          # Known
+                category,       # Category
+                priority,       # Priority
+                action,         # Action
+                choreographer,  # Choreographer
+                release_date    # Release Date
+            ]
+            for col_idx, value in enumerate(row_data):
+                self.table.setItem(row_idx, col_idx, QTableWidgetItem(str(value)))
+        # Resize the 'Level' column to fit its contents
+        level_col = headers.index("Level")
+        self.table.resizeColumnToContents(level_col)
+        conn.close()
+
+        # Restore sorting if it was enabled
+        self.table.setSortingEnabled(sorting_enabled)
+        if sorting_enabled:
+            self.table.sortItems(sort_col, sort_order)
 
     def load_dances(self):
         from db.song_queries import get_songs_for_dance, get_dance_id_by_name_and_choreo

@@ -10,6 +10,9 @@ class ImportedDancesDialog(QDialog):
         self.setFixedSize(1000, 900)
         self.move(100, 100)
 
+        # Always define fetched_dances as an empty list
+        self.fetched_dances = []
+
         main_layout = QHBoxLayout()
 
         # Left panel: checkboxes and controls
@@ -107,10 +110,10 @@ class ImportedDancesDialog(QDialog):
         # Save all fetched dances to the database using logic similar to save_dance in main.py
         from db.models import get_connection
         from PyQt5.QtWidgets import QMessageBox
-        if not self.fetched_dances:
-            QMessageBox.warning(self, "No Fetched Dances", "No fetched dances to save.")
-            return
         try:
+            if not hasattr(self, 'fetched_dances') or not self.fetched_dances:
+                QMessageBox.warning(self, "No Fetched Dances", "No fetched dances to save.")
+                return
             conn = get_connection()
             c = conn.cursor()
             count_saved = 0
