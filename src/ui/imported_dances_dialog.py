@@ -1,4 +1,4 @@
-from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QCheckBox, QLabel, QScrollArea, QWidget
+from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QCheckBox, QLabel, QScrollArea, QWidget, QListWidget, QListWidgetItem, QLineEdit, QTextEdit, QComboBox, QSizePolicy
 import csv
 
 CSV_PATH = 'assets/copperknob_links_and_songs.csv'
@@ -7,19 +7,20 @@ class ImportedDancesDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Imported Dances")
-        self.resize(500, 600)
-        layout = QVBoxLayout()
+        self.resize(900, 600)
 
-        # Count label
+        main_layout = QHBoxLayout()
+
+        # Left panel: checkboxes and controls
+        left_layout = QVBoxLayout()
         self.count_label = QLabel()
-        layout.addWidget(self.count_label)
-
-        # Load dances from CSV
+        left_layout.addWidget(self.count_label)
         self.checkboxes = []
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         container = QWidget()
         vbox = QVBoxLayout()
+        self.dance_rows = []  # Store CSV rows for later reference
         with open(CSV_PATH, 'r', encoding='utf-8') as f:
             reader = csv.reader(f)
             next(reader)  # skip header
@@ -30,21 +31,111 @@ class ImportedDancesDialog(QDialog):
                     cb.stateChanged.connect(self.update_count)
                     self.checkboxes.append(cb)
                     vbox.addWidget(cb)
+                    self.dance_rows.append(row)
         container.setLayout(vbox)
         scroll.setWidget(container)
-        layout.addWidget(scroll)
+        left_layout.addWidget(scroll)
 
         btns = QHBoxLayout()
         select_all_btn = QPushButton("Select All")
         deselect_all_btn = QPushButton("Deselect All")
+        fetch_selected_btn = QPushButton("Fetch Selected")
         select_all_btn.clicked.connect(self.select_all)
         deselect_all_btn.clicked.connect(self.deselect_all)
+        fetch_selected_btn.clicked.connect(self.fetch_selected)
         btns.addWidget(select_all_btn)
         btns.addWidget(deselect_all_btn)
-        layout.addLayout(btns)
+        btns.addWidget(fetch_selected_btn)
+        left_layout.addLayout(btns)
 
-        self.setLayout(layout)
+        # Right panel: list of fetched dances and details
+        right_layout = QVBoxLayout()
+        self.fetched_list = QListWidget()
+        self.fetched_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.fetched_list.currentRowChanged.connect(self.show_fetched_details)
+        right_layout.addWidget(QLabel("Fetched Dances:"))
+        right_layout.addWidget(self.fetched_list)
+
+        # Details area (read-only, mimics AddDanceDialog)
+        self.details_widget = QWidget()
+        details_layout = QVBoxLayout()
+        self.details_widget.setLayout(details_layout)
+        self.detail_fields = {}
+        for label in [
+            ("Dance Name", QLineEdit),
+            ("Choreographer", QLineEdit),
+            ("Level", QLineEdit),
+            ("Notes", QTextEdit),
+        ]:
+            l = QLabel(label[0]+":")
+            field = label[1]()
+            if isinstance(field, QLineEdit):
+                field.setReadOnly(True)
+            elif isinstance(field, QTextEdit):
+                field.setReadOnly(True)
+                field.setMaximumHeight(60)
+            details_layout.addWidget(l)
+            details_layout.addWidget(field)
+            self.detail_fields[label[0].lower()] = field
+        self.details_widget.setVisible(False)
+        right_layout.addWidget(self.details_widget)
+
+        main_layout.addLayout(left_layout, 2)
+        main_layout.addLayout(right_layout, 3)
+        self.setLayout(main_layout)
         self.update_count()
+
+        # Store fetched data: list of dicts
+        self.fetched_dances = []
+
+    def fetch_selected(self):
+        from PyQt5.QtWidgets import QMessageBox
+        import requests
+        from scrapers.dance_scraper import scrape_dance_info
+        self.fetched_dances = []
+        self.fetched_list.clear()
+        for cb, row in zip(self.checkboxes, self.dance_rows):
+            if cb.isChecked():
+                url = row[0]
+                info = scrape_dance_info(url)
+                if info:
+                    self.fetched_dances.append(info)
+                    display_name = info.get('name', '') or row[1]
+                    choreo = info.get('choreographer', '').strip()
+                    if choreo:
+                        self.fetched_list.addItem(f"{display_name} (Choreo: {choreo})")
+                    else:
+                        self.fetched_list.addItem(display_name)
+                else:
+                    self.fetched_dances.append(None)
+                    self.fetched_list.addItem(f"Failed to fetch: {url}")
+        if self.fetched_dances:
+            self.details_widget.setVisible(True)
+            self.fetched_list.setCurrentRow(0)
+        else:
+            self.details_widget.setVisible(False)
+            QMessageBox.information(self, "Fetch Results", "No dances selected or fetched.")
+
+    def show_fetched_details(self, row):
+        if row < 0 or row >= len(self.fetched_dances):
+            for field in self.detail_fields.values():
+                if isinstance(field, QLineEdit):
+                    field.clear()
+                elif isinstance(field, QTextEdit):
+                    field.clear()
+            return
+        info = self.fetched_dances[row]
+        if not info:
+            for field in self.detail_fields.values():
+                if isinstance(field, QLineEdit):
+                    field.setText("Failed to fetch")
+                elif isinstance(field, QTextEdit):
+                    field.setPlainText("")
+            return
+        self.detail_fields['dance name'].setText(info.get('name', ''))
+        self.detail_fields['choreographer'].setText(info.get('choreographer', ''))
+        self.detail_fields['level'].setText(info.get('level', ''))
+        self.detail_fields['notes'].setPlainText(info.get('notes', ''))
 
     def select_all(self):
         for cb in self.checkboxes:
