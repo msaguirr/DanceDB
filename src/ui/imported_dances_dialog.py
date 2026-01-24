@@ -1,9 +1,20 @@
 from PyQt5.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QCheckBox, QLabel, QScrollArea, QWidget, QListWidget, QListWidgetItem, QLineEdit, QTextEdit, QComboBox, QSizePolicy
+from PyQt5.QtCore import Qt
 import csv
 
 CSV_PATH = 'assets/copperknob_links_and_songs.csv'
 
 class ImportedDancesDialog(QDialog):
+    def handle_checkbox_clicked(self, idx, checked):
+        from PyQt5.QtWidgets import QApplication
+        modifiers = QApplication.keyboardModifiers()
+        if modifiers & Qt.ShiftModifier and self._last_clicked_checkbox_index is not None:
+            start = min(self._last_clicked_checkbox_index, idx)
+            end = max(self._last_clicked_checkbox_index, idx)
+            for i in range(start, end + 1):
+                self.checkboxes[i].setChecked(checked)
+        self._last_clicked_checkbox_index = idx
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Imported Dances")
@@ -20,6 +31,7 @@ class ImportedDancesDialog(QDialog):
         self.count_label = QLabel()
         left_layout.addWidget(self.count_label)
         self.checkboxes = []
+        self._last_clicked_checkbox_index = None
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         container = QWidget()
@@ -32,6 +44,8 @@ class ImportedDancesDialog(QDialog):
                 if len(row) >= 2:
                     cb = QCheckBox(f"{row[1]} (Song: {row[2]})")
                     cb.setChecked(True)
+                    # Connect to custom handler for shift-click selection
+                    cb.clicked.connect(lambda checked, idx=len(self.checkboxes): self.handle_checkbox_clicked(idx, checked))
                     cb.stateChanged.connect(self.update_count)
                     self.checkboxes.append(cb)
                     vbox.addWidget(cb)
